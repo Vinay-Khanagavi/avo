@@ -1,0 +1,84 @@
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { TranscribeClient, StartTranscriptionJobCommand, GetTranscriptionJobCommand } from "@aws-sdk/client-transcribe"
+import { fromIni } from "@aws-sdk/credential-providers"
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
+
+// Initialize AWS clients
+function getTranscribeClient() {
+  const region = process.env.AWS_REGION || "us-east-1"
+  return new TranscribeClient({
+    region,
+    credentials: fromIni({
+      profile: process.env.AWS_PROFILE || "default",
+    }),
+  })
+}
+
+function getS3Client() {
+  const region = process.env.AWS_REGION || "us-east-1"
+  return new S3Client({
+    region,
+    credentials: fromIni({
+      profile: process.env.AWS_PROFILE || "default",
+    }),
+  })
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
+    }
+
+    // Get audio data from request
+    const formData = await request.formData()
+    const audioFile = formData.get("audio") as File
+
+    if (!audioFile) {
+      return NextResponse.json(
+        { error: "No audio file provided" },
+        { status: 400 }
+      )
+    }
+
+    // For now, return a mock transcript since AWS Transcribe setup requires S3 bucket
+    // In production, you would:
+    // 1. Upload audio to S3
+    // 2. Start transcription job
+    // 3. Poll for completion
+    // 4. Retrieve transcript
+    
+    // Mock response for development
+    const mockTranscript = "This is a mock transcription. Please configure AWS Transcribe with S3 bucket for production use."
+
+    // Save transcription to database
+    if (mockTranscript.trim()) {
+      await prisma.transcription.create({
+        data: {
+          text: mockTranscript.trim(),
+          userId: session.user.id,
+        },
+      })
+    }
+
+    return NextResponse.json({
+      transcript: mockTranscript.trim(),
+      success: true,
+    })
+  } catch (error) {
+    console.error("Transcribe API error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+

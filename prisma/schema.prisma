@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  passwordHash  String          @map("password_hash")
+  name          String?
+  createdAt     DateTime        @default(now()) @map("created_at")
+  transcriptions Transcription[]
+  dictionary    Dictionary[]
+
+  @@map("users")
+}
+
+model Transcription {
+  id        String   @id @default(cuid())
+  text      String
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("transcriptions")
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Dictionary {
+  id           String  @id @default(cuid())
+  word         String
+  substitution String?
+  userId       String  @map("user_id")
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, word])
+  @@map("dictionary")
+  @@index([userId])
+}
