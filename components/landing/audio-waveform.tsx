@@ -1,138 +1,184 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { gsap } from "gsap"
-
 interface AudioWaveformProps {
   className?: string
-  barCount?: number
-  color?: string
 }
 
-export function AudioWaveform({
-  className = "",
-  barCount = 50,
-  color = "#212121", // Dark grey color (matches oklch(0.3485 0 0))
-}: AudioWaveformProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const barsRef = useRef<number[]>([])
-  const barObjectsRef = useRef<Record<string, number>>({})
-  const animationsRef = useRef<gsap.core.Tween[]>([])
+// SVG paths for waveform bars (44 bars total)
+const waveformPaths = [
+  "M1.78046 12.161C1.78046 10.7162 2.95172 9.54492 4.39655 9.54492C5.84138 9.54492 7.01264 10.7162 7.01264 12.161V20.0093C7.01264 21.4541 5.84138 22.6254 4.39655 22.6254C2.95172 22.6254 1.78046 21.4541 1.78046 20.0093V12.161Z",
+  "M9.62872 13.4696C9.62872 12.0248 10.8 10.8535 12.2448 10.8535C13.6896 10.8535 14.8609 12.0248 14.8609 13.4696V18.7018C14.8609 20.1466 13.6896 21.3179 12.2448 21.3179C10.8 21.3179 9.62872 20.1466 9.62872 18.7018V13.4696Z",
+  "M17.477 16.0858C17.477 14.641 18.6483 13.4697 20.0931 13.4697C21.5379 13.4697 22.7092 14.641 22.7092 16.0858C22.7092 17.5306 21.5379 18.7019 20.0931 18.7019C18.6483 18.7019 17.477 17.5306 17.477 16.0858Z",
+  "M25.3253 10.8534C25.3253 9.40857 26.4965 8.2373 27.9413 8.2373C29.3862 8.2373 30.5574 9.40857 30.5574 10.8534V21.3178C30.5574 22.7626 29.3862 23.9339 27.9413 23.9339C26.4965 23.9339 25.3253 22.7626 25.3253 21.3178V10.8534Z",
+  "M33.1736 14.7772C33.1736 13.3324 34.3448 12.1611 35.7897 12.1611C37.2345 12.1611 38.4058 13.3324 38.4058 14.7772V17.3933C38.4058 18.8381 37.2345 20.0094 35.7897 20.0094C34.3448 20.0094 33.1736 18.8381 33.1736 17.3933V14.7772Z",
+  "M41.0219 9.54578C41.0219 8.10096 42.1931 6.92969 43.6379 6.92969C45.0828 6.92969 46.254 8.10095 46.254 9.54578V22.6262C46.254 24.0711 45.0828 25.2423 43.6379 25.2423C42.1931 25.2423 41.0219 24.0711 41.0219 22.6262V9.54578Z",
+  "M48.8701 16.0858C48.8701 14.641 50.0414 13.4697 51.4862 13.4697C52.931 13.4697 54.1023 14.641 54.1023 16.0858C54.1023 17.5306 52.931 18.7019 51.4862 18.7019C50.0414 18.7019 48.8701 17.5306 48.8701 16.0858Z",
+  "M56.7184 14.7772C56.7184 13.3324 57.8896 12.1611 59.3345 12.1611C60.7793 12.1611 61.9506 13.3324 61.9506 14.7772V17.3933C61.9506 18.8381 60.7793 20.0094 59.3345 20.0094C57.8896 20.0094 56.7184 18.8381 56.7184 17.3933V14.7772Z",
+  "M64.5667 13.4696C64.5667 12.0248 65.7379 10.8535 67.1827 10.8535C68.6276 10.8535 69.7988 12.0248 69.7988 13.4696V18.7018C69.7988 20.1466 68.6276 21.3179 67.1827 21.3179C65.7379 21.3179 64.5667 20.1466 64.5667 18.7018V13.4696Z",
+  "M72.4149 13.4696C72.4149 12.0248 73.5862 10.8535 75.031 10.8535C76.4758 10.8535 77.6471 12.0248 77.6471 13.4696V18.7018C77.6471 20.1466 76.4758 21.3179 75.031 21.3179C73.5862 21.3179 72.4149 20.1466 72.4149 18.7018V13.4696Z",
+  "M80.2632 8.23719C80.2632 6.79236 81.4344 5.62109 82.8793 5.62109C84.3241 5.62109 85.4954 6.79236 85.4954 8.23719V23.9337C85.4954 25.3786 84.3241 26.5498 82.8793 26.5498C81.4344 26.5498 80.2632 25.3786 80.2632 23.9337V8.23719Z",
+  "M88.1115 14.7772C88.1115 13.3324 89.2827 12.1611 90.7275 12.1611C92.1724 12.1611 93.3436 13.3324 93.3436 14.7772V18.7014C93.3436 20.1462 92.1724 21.3175 90.7275 21.3175C89.2827 21.3175 88.1115 20.1462 88.1115 18.7014V14.7772Z",
+  "M95.9597 10.8534C95.9597 9.40857 97.131 8.2373 98.5758 8.2373C100.021 8.2373 101.192 9.40857 101.192 10.8534V21.3178C101.192 22.7626 100.021 23.9339 98.5758 23.9339C97.131 23.9339 95.9597 22.7626 95.9597 21.3178V10.8534Z",
+  "M103.808 6.92957C103.808 5.48474 104.979 4.31348 106.424 4.31348C107.869 4.31348 109.04 5.48474 109.04 6.92957V25.2422C109.04 26.687 107.869 27.8583 106.424 27.8583C104.979 27.8583 103.808 26.687 103.808 25.2422V6.92957Z",
+  "M111.656 10.8534C111.656 9.40857 112.828 8.2373 114.272 8.2373C115.717 8.2373 116.888 9.40857 116.888 10.8534V21.3178C116.888 22.7626 115.717 23.9339 114.272 23.9339C112.828 23.9339 111.656 22.7626 111.656 21.3178V10.8534Z",
+  "M119.505 4.31335C119.505 2.86853 120.676 1.69727 122.121 1.69727C123.565 1.69727 124.737 2.86853 124.737 4.31336V27.8582C124.737 29.303 123.565 30.4743 122.121 30.4743C120.676 30.4743 119.505 29.303 119.505 27.8582V4.31335Z",
+  "M127.353 8.23719C127.353 6.79236 128.524 5.62109 129.969 5.62109C131.414 5.62109 132.585 6.79236 132.585 8.23719V23.9337C132.585 25.3786 131.414 26.5498 129.969 26.5498C128.524 26.5498 127.353 25.3786 127.353 23.9337V8.23719Z",
+  "M135.201 14.7772C135.201 13.3324 136.372 12.1611 137.817 12.1611C139.262 12.1611 140.433 13.3324 140.433 14.7772V17.3933C140.433 18.8381 139.262 20.0094 137.817 20.0094C136.372 20.0094 135.201 18.8381 135.201 17.3933V14.7772Z",
+  "M143.049 12.161C143.049 10.7162 144.221 9.54492 145.666 9.54492C147.11 9.54492 148.282 10.7162 148.282 12.161V20.0093C148.282 21.4541 147.11 22.6254 145.666 22.6254C144.221 22.6254 143.049 21.4541 143.049 20.0093V12.161Z",
+  "M150.898 13.4696C150.898 12.0248 152.069 10.8535 153.514 10.8535C154.959 10.8535 156.13 12.0248 156.13 13.4696V18.7018C156.13 20.1466 154.959 21.3179 153.514 21.3179C152.069 21.3179 150.898 20.1466 150.898 18.7018V13.4696Z",
+  "M158.746 16.0858C158.746 14.641 159.917 13.4697 161.362 13.4697C162.807 13.4697 163.978 14.641 163.978 16.0858C163.978 17.5306 162.807 18.7019 161.362 18.7019C159.917 18.7019 158.746 17.5306 158.746 16.0858Z",
+  "M166.594 10.8534C166.594 9.40857 167.766 8.2373 169.21 8.2373C170.655 8.2373 171.826 9.40857 171.826 10.8534V21.3178C171.826 22.7626 170.655 23.9339 169.21 23.9339C167.766 23.9339 166.594 22.7626 166.594 21.3178V10.8534Z",
+  "M174.443 14.7772C174.443 13.3324 175.614 12.1611 177.059 12.1611C178.503 12.1611 179.675 13.3324 179.675 14.7772V17.3933C179.675 18.8381 178.503 20.0094 177.059 20.0094C175.614 20.0094 174.443 18.8381 174.443 17.3933V14.7772Z",
+  "M182.291 9.54578C182.291 8.10096 183.462 6.92969 184.907 6.92969C186.352 6.92969 187.523 8.10095 187.523 9.54578V22.6262C187.523 24.0711 186.352 25.2423 184.907 25.2423C183.462 25.2423 182.291 24.0711 182.291 22.6262V9.54578Z",
+  "M190.139 16.0858C190.139 14.641 191.31 13.4697 192.755 13.4697C194.2 13.4697 195.371 14.641 195.371 16.0858C195.371 17.5306 194.2 18.7019 192.755 18.7019C191.31 18.7019 190.139 17.5306 190.139 16.0858Z",
+  "M197.987 14.7772C197.987 13.3324 199.159 12.1611 200.604 12.1611C202.048 12.1611 203.22 13.3324 203.22 14.7772V17.3933C203.22 18.8381 202.048 20.0094 200.604 20.0094C199.159 20.0094 197.987 18.8381 197.987 17.3933V14.7772Z",
+  "M205.836 13.4696C205.836 12.0248 207.007 10.8535 208.452 10.8535C209.897 10.8535 211.068 12.0248 211.068 13.4696V18.7018C211.068 20.1466 209.897 21.3179 208.452 21.3179C207.007 21.3179 205.836 20.1466 205.836 18.7018V13.4696Z",
+  "M213.684 8.23719C213.684 6.79236 214.855 5.62109 216.3 5.62109C217.745 5.62109 218.916 6.79236 218.916 8.23719V23.9337C218.916 25.3786 217.745 26.5498 216.3 26.5498C214.855 26.5498 213.684 25.3786 213.684 23.9337V8.23719Z",
+  "M221.532 13.4696C221.532 12.0248 222.703 10.8535 224.148 10.8535C225.593 10.8535 226.764 12.0248 226.764 13.4696V18.7018C226.764 20.1466 225.593 21.3179 224.148 21.3179C222.703 21.3179 221.532 20.1466 221.532 18.7018V13.4696Z",
+  "M229.38 10.8534C229.38 9.40857 230.552 8.2373 231.997 8.2373C233.441 8.2373 234.613 9.40857 234.613 10.8534V21.3178C234.613 22.7626 233.441 23.9339 231.997 23.9339C230.552 23.9339 229.38 22.7626 229.38 21.3178V10.8534Z",
+  "M237.229 6.92957C237.229 5.48474 238.4 4.31348 239.845 4.31348C241.29 4.31348 242.461 5.48474 242.461 6.92957V25.2422C242.461 26.687 241.29 27.8583 239.845 27.8583C238.4 27.8583 237.229 26.687 237.229 25.2422V6.92957Z",
+  "M245.077 14.7772C245.077 13.3324 246.248 12.1611 247.693 12.1611C249.138 12.1611 250.309 13.3324 250.309 14.7772V17.3933C250.309 18.8381 249.138 20.0094 247.693 20.0094C246.248 20.0094 245.077 18.8381 245.077 17.3933V14.7772Z",
+  "M252.925 6.92957C252.925 5.48474 254.097 4.31348 255.541 4.31348C256.986 4.31348 258.157 5.48474 258.157 6.92957V25.2422C258.157 26.687 256.986 27.8583 255.541 27.8583C254.097 27.8583 252.925 26.687 252.925 25.2422V6.92957Z",
+  "M260.774 13.4696C260.774 12.0248 261.945 10.8535 263.39 10.8535C264.834 10.8535 266.006 12.0248 266.006 13.4696V18.7018C266.006 20.1466 264.834 21.3179 263.39 21.3179C261.945 21.3179 260.774 20.1466 260.774 18.7018V13.4696Z",
+  "M268.622 10.8534C268.622 9.40857 269.793 8.2373 271.238 8.2373C272.683 8.2373 273.854 9.40857 273.854 10.8534V21.3178C273.854 22.7626 272.683 23.9339 271.238 23.9339C269.793 23.9339 268.622 22.7626 268.622 21.3178V10.8534Z",
+  "M276.47 9.54578C276.47 8.10096 277.641 6.92969 279.086 6.92969C280.531 6.92969 281.702 8.10095 281.702 9.54578V22.6262C281.702 24.0711 280.531 25.2423 279.086 25.2423C277.641 25.2423 276.47 24.0711 276.47 22.6262V9.54578Z",
+  "M284.318 12.161C284.318 10.7162 285.49 9.54492 286.935 9.54492C288.379 9.54492 289.551 10.7162 289.551 12.161V20.0093C289.551 21.4541 288.379 22.6254 286.935 22.6254C285.49 22.6254 284.318 21.4541 284.318 20.0093V12.161Z",
+  "M292.167 13.4696C292.167 12.0248 293.338 10.8535 294.783 10.8535C296.228 10.8535 297.399 12.0248 297.399 13.4696V18.7018C297.399 20.1466 296.228 21.3179 294.783 21.3179C293.338 21.3179 292.167 20.1466 292.167 18.7018V13.4696Z",
+  "M300.015 16.0858C300.015 14.641 301.186 13.4697 302.631 13.4697C304.076 13.4697 305.247 14.641 305.247 16.0858C305.247 17.5306 304.076 18.7019 302.631 18.7019C301.186 18.7019 300.015 17.5306 300.015 16.0858Z",
+  "M307.863 10.8534C307.863 9.40857 309.035 8.2373 310.479 8.2373C311.924 8.2373 313.095 9.40857 313.095 10.8534V21.3178C313.095 22.7626 311.924 23.9339 310.479 23.9339C309.035 23.9339 307.863 22.7626 307.863 21.3178V10.8534Z",
+  "M315.712 14.7772C315.712 13.3324 316.883 12.1611 318.328 12.1611C319.772 12.1611 320.944 13.3324 320.944 14.7772V17.3933C320.944 18.8381 319.772 20.0094 318.328 20.0094C316.883 20.0094 315.712 18.8381 315.712 17.3933V14.7772Z",
+  "M323.56 9.54578C323.56 8.10096 324.731 6.92969 326.176 6.92969C327.621 6.92969 328.792 8.10095 328.792 9.54578V22.6262C328.792 24.0711 327.621 25.2423 326.176 25.2423C324.731 25.2423 323.56 24.0711 323.56 22.6262V9.54578Z",
+  "M331.408 16.0858C331.408 14.641 332.579 13.4697 334.024 13.4697C335.469 13.4697 336.64 14.641 336.64 16.0858C336.64 17.5306 335.469 18.7019 334.024 18.7019C332.579 18.7019 331.408 17.5306 331.408 16.0858Z",
+  "M339.256 14.7772C339.256 13.3324 340.428 12.1611 341.872 12.1611C343.317 12.1611 344.489 13.3324 344.489 14.7772V17.3933C344.489 18.8381 343.317 20.0094 341.872 20.0094C340.428 20.0094 339.256 18.8381 339.256 17.3933V14.7772Z",
+  "M347.105 13.4696C347.105 12.0248 348.276 10.8535 349.721 10.8535C351.166 10.8535 352.337 12.0248 352.337 13.4696V18.7018C352.337 20.1466 351.166 21.3179 349.721 21.3179C348.276 21.3179 347.105 20.1466 347.105 18.7018V13.4696Z",
+]
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+// Animation delays for each bar (staggered)
+const animationDelays = [
+  0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 0.2, 0.4, 0.6, 0.8, 1, 0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 0.15, 0.35, 0.55, 0.75, 0.95, 1.15, 0.25, 0.45, 0.65, 0.85, 1.05, 1.25, 0.05, 0.25, 0.45, 0.65, 0.85, 1.05,
+]
 
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-
-    // Initialize bars with random values
-    barsRef.current = Array.from({ length: barCount }, () => Math.random() * 0.4 + 0.2)
-    
-    // Create object for GSAP to animate
-    barObjectsRef.current = {}
-    barsRef.current.forEach((value, index) => {
-      barObjectsRef.current[`bar${index}`] = value
-    })
-
-    const resize = () => {
-      canvas.width = canvas.offsetWidth * 2 // For retina displays
-      canvas.height = canvas.offsetHeight * 2
-      ctx.scale(2, 2)
-    }
-
-    resize()
-    window.addEventListener("resize", resize)
-
-    // Function to update target values smoothly
-    const updateTargets = () => {
-      barsRef.current.forEach((_, index) => {
-        const newTarget = Math.random() * 0.65 + 0.2
-        const barKey = `bar${index}`
-
-        // Animate bar to new target using GSAP
-        if (animationsRef.current[index]) {
-          animationsRef.current[index].kill()
-        }
-
-        animationsRef.current[index] = gsap.to(barObjectsRef.current, {
-          [barKey]: newTarget,
-          duration: 2.5 + Math.random() * 1.5, // 2.5-4 seconds for smooth, slow animation
-          ease: "power2.inOut", // Smooth easing
-          onUpdate: () => {
-            barsRef.current[index] = barObjectsRef.current[barKey]
-          },
-        })
-      })
-    }
-
-    // Update targets periodically (slower updates)
-    const targetInterval = setInterval(updateTargets, 3500) // Update every 3.5 seconds
-
-    // Initial update with slight delay for staggered effect
-    setTimeout(() => {
-      updateTargets()
-    }, 100)
-
-    // Render loop
-    let animationFrame: number
-    const render = () => {
-      ctx.clearRect(0, 0, canvas.width / 2, canvas.height / 2)
-
-      const totalWidth = canvas.width / 2
-      const barWidth = totalWidth / barCount
-      const gap = barWidth * 0.1
-      const maxHeight = (canvas.height / 2) * 0.85
-      const baselineY = canvas.height / 2 - 15
-
-      barsRef.current.forEach((bar, index) => {
-        const height = bar * maxHeight
-        const x = index * (barWidth + gap) + barWidth / 2
-        const barX = x - barWidth / 2
-        const barY = baselineY - height
-        const radius = Math.min(barWidth * 0.5, height * 0.4)
-
-        // Draw shadow first (subtle)
-        ctx.fillStyle = "rgba(0, 0, 0, 0.15)"
-        ctx.beginPath()
-        ctx.moveTo(barX + 1, baselineY + 1)
-        ctx.lineTo(barX + barWidth + 1, baselineY + 1)
-        ctx.lineTo(barX + barWidth + 1, barY + radius + 1)
-        ctx.arc(barX + barWidth / 2 + 1, barY + 1, radius, 0, Math.PI, true)
-        ctx.closePath()
-        ctx.fill()
-
-        // Draw rounded rectangle bar (pill-like with rounded top, flat bottom)
-        ctx.fillStyle = color
-        ctx.beginPath()
-        ctx.moveTo(barX, baselineY)
-        ctx.lineTo(barX + barWidth, baselineY)
-        ctx.lineTo(barX + barWidth, barY + radius)
-        ctx.arc(barX + barWidth / 2, barY, radius, 0, Math.PI, true)
-        ctx.lineTo(barX, baselineY)
-        ctx.closePath()
-        ctx.fill()
-      })
-
-      animationFrame = requestAnimationFrame(render)
-    }
-
-    render()
-
-    return () => {
-      window.removeEventListener("resize", resize)
-      clearInterval(targetInterval)
-      animationsRef.current.forEach((anim) => anim?.kill())
-      cancelAnimationFrame(animationFrame)
-    }
-  }, [barCount, color])
-
+export function AudioWaveform({ className = "" }: AudioWaveformProps) {
   return (
-    <canvas
-      ref={canvasRef}
-      className={className}
-      style={{ width: "100%", height: "100%" }}
-    />
+    <div className={`relative w-full h-full ${className}`}>
+      {/* Dot Pattern Background */}
+      <div
+        className="audio-wrapper-section absolute inset-0 opacity-30 dark:opacity-20"
+        style={{
+          backgroundImage: "radial-gradient(circle, rgba(255, 255, 255, 0.4) 1px, transparent 0)",
+          backgroundSize: "9px 9px",
+          maskImage: "radial-gradient(ellipse 60% 57% at 60% 45%, #000 10%, #000 20%, transparent 105%)",
+          WebkitMaskImage: "radial-gradient(ellipse 60% 57% at 60% 45%, #000 10%, #000 20%, transparent 105%)",
+        }}
+      />
+
+      {/* Gradient Circle */}
+      <div
+        className="gradient-circle absolute top-0 right-0 w-[442px] h-[409px] md:w-[442px] md:h-[409px] rounded-full opacity-70"
+        style={{
+          background: "conic-gradient(from -39deg at 50% 50%, #0091ff 0deg, #fa24ce 67deg, #fc6d7b 187deg, #fd9a46 210deg, #f687c6 234deg, #4fb9fa 342deg)",
+          mixBlendMode: "plus-lighter",
+          filter: "blur(80px)",
+          transform: "translate(50%, -50%)",
+        }}
+      />
+
+      {/* Gradient Rectangle */}
+      <div
+        className="gradient-rectangle absolute top-1/2 left-[75px] md:left-[75px] w-[524px] h-[209px] opacity-100"
+        style={{
+          background: "conic-gradient(from -39deg at 50% 50%, rgba(0, 145, 255, 0.2) 0deg, rgba(250, 36, 206, 0.3) 56deg, rgba(252, 109, 123, 0.2) 187deg, rgba(253, 154, 70, 0.2) 210deg, rgba(246, 134, 197, 0.3) 234deg, rgba(79, 185, 250, 0.2) 342deg)",
+          filter: "blur(60px)",
+          mixBlendMode: "plus-lighter",
+          transform: "translateY(-50%)",
+        }}
+      />
+
+      {/* Glow Effect SVG */}
+      <svg
+        className="glow-effect absolute top-1/2 left-1/2 w-full h-full -translate-x-1/2 -translate-y-1/2"
+        width="445"
+        height="408"
+        viewBox="0 0 445 408"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+      >
+        <defs>
+          <filter id="glow-filter" x="0.420654" y="-37.9795" width="517.968" height="487.883" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
+            <feFlood floodOpacity="0" result="BackgroundImageFix" />
+            <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+            <feGaussianBlur stdDeviation="17" result="effect1_foregroundBlur" />
+          </filter>
+          <clipPath id="glow-clip">
+            <rect x="34.4207" y="-3.97949" width="449.968" height="419.883" rx="209.941" />
+          </clipPath>
+        </defs>
+        <g style={{ mixBlendMode: "screen", opacity: 0.1, filter: "url(#glow-filter)" }}>
+          <g clipPath="url(#glow-clip)">
+            <g transform="matrix(-0.24907 -0.286284 0.420226 -0.259753 259.402 205.962)">
+              <foreignObject x="-798.784" y="-798.784" width="1597.57" height="1597.57">
+                <div
+                  style={{
+                    background: "conic-gradient(from 90deg, rgba(0, 145, 255, 1) 0deg, rgba(250, 36, 206, 1) 70.1254deg, rgba(252, 109, 123, 1) 187.2deg, rgba(253, 154, 70, 1) 210.427deg, rgba(246, 134, 197, 1) 233.654deg, rgba(79, 185, 250, 1) 341.545deg, rgba(0, 145, 255, 1) 360deg)",
+                    height: "100%",
+                    width: "100%",
+                    opacity: 1,
+                  }}
+                />
+              </foreignObject>
+            </g>
+          </g>
+          <rect x="34.4207" y="-3.97949" width="449.968" height="419.883" rx="209.941" />
+        </g>
+      </svg>
+
+      {/* Glassmorphism Container */}
+      <div
+        className="glassmorphism-container absolute top-1/2 left-[75px] md:left-[75px] w-[523px] md:w-[523px] h-[209px] -translate-y-1/2 rounded-[39px] pt-[11px] pl-[11px] backdrop-blur-[12px] border-2 overflow-hidden"
+        style={{
+          background: "linear-gradient(135deg, rgb(25, 25, 25) 31.36%, rgb(14, 14, 14) 76.4%), conic-gradient(from 0deg, #0091ff, #fa24ce, #fc6d7b, #fd9a46, #f686c5, #4fb9fa, #0091ff)",
+          backgroundClip: "padding-box, border-box",
+          backgroundOrigin: "padding-box, border-box",
+          borderColor: "rgba(0, 0, 0, 0)",
+          boxShadow: "0 8px 16px -4px rgba(0, 0, 0, 0.3), 0 4px 8px -2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+          maskImage: "linear-gradient(to bottom, black 0%, black 50%, rgba(0,0,0,0.9) 60%, rgba(0,0,0,0.6) 70%, rgba(0,0,0,0.3) 80%, transparent 90%)",
+          WebkitMaskImage: "linear-gradient(to bottom, black 0%, black 50%, rgba(0,0,0,0.9) 60%, rgba(0,0,0,0.6) 70%, rgba(0,0,0,0.3) 80%, transparent 90%)",
+        }}
+      >
+        {/* Waveform SVG */}
+        <div className="waveform-inner flex items-center justify-center w-[497px] md:w-[497px] h-[133px] rounded-[26px] mb-[13px] backdrop-blur-[12px] border-2" style={{
+          background: "linear-gradient(135deg, rgb(25, 25, 25) 31.36%, rgb(14, 14, 14) 76.4%), conic-gradient(from 0deg, #0091ff, #fa24ce, #fc6d7b, #fd9a46, #f686c5, #4fb9fa, #0091ff)",
+          backgroundClip: "padding-box, border-box",
+          backgroundOrigin: "padding-box, border-box",
+          borderColor: "rgba(0, 0, 0, 0.3)",
+        }}>
+          <svg
+            width="354"
+            height="32"
+            viewBox="0 0 354 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-label="Audio wave"
+            className="w-full max-w-[354px] px-4"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            {waveformPaths.map((path, index) => (
+              <path
+                key={index}
+                d={path}
+                fill="white"
+                fillOpacity="0.9294"
+                className="waveform-bar"
+                style={{
+                  animationDelay: `${animationDelays[index]}s`,
+                }}
+              />
+            ))}
+          </svg>
+        </div>
+      </div>
+    </div>
   )
 }
-

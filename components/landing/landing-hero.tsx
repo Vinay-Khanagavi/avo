@@ -40,7 +40,7 @@ export function LandingHero() {
           <AudioWaveform
             className="w-full h-full"
             barCount={50}
-            color="#212121"
+            color="oklch(0.4891 0 0)"
           />
         </div>
 
