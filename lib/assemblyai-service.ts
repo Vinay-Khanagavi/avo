@@ -163,9 +163,19 @@ export async function transcribeAssemblyAIChunk(
       }
     }
     
-    // Check for duplicates to prevent repetition during silence
-    // Case 1: New transcript exactly equals existing (duplicate)
+    // If no existing transcript, return the new one
+    if (!normalizedExisting) {
+      return {
+        session_id: sessionId,
+        transcript: normalizedTranscript,
+        incremental: normalizedTranscript,
+        is_final: isFinal,
+      }
+    }
+    
+    // Improved duplicate detection: Check if new transcript is identical or contained
     if (normalizedExisting === normalizedTranscript) {
+      // Exact duplicate
       return {
         session_id: sessionId,
         transcript: existingTranscript,
@@ -174,80 +184,121 @@ export async function transcribeAssemblyAIChunk(
       }
     }
     
-    // Case 2: New transcript is shorter than or equal to existing
-    // This likely indicates a duplicate/regression during silence
-    if (normalizedExisting && normalizedTranscript.length <= normalizedExisting.length) {
-      // Check if the new transcript is contained in existing (likely duplicate)
-      if (normalizedExisting.includes(normalizedTranscript)) {
+    // Check if new transcript is entirely contained in existing (duplicate)
+    if (normalizedExisting.includes(normalizedTranscript)) {
+      return {
+        session_id: sessionId,
+        transcript: existingTranscript,
+        incremental: "",
+        is_final: isFinal,
+      }
+    }
+    
+    // Check if new transcript contains the entire existing transcript (legitimate continuation)
+    if (normalizedTranscript.startsWith(normalizedExisting)) {
+      // Extract only the new part
+      const incremental = normalizedTranscript.slice(normalizedExisting.length).trim()
+      if (incremental) {
         return {
           session_id: sessionId,
-          transcript: existingTranscript,
-          incremental: "",
+          transcript: normalizedTranscript,
+          incremental,
+          is_final: isFinal,
+        }
+      }
+      // No new content, return existing
+      return {
+        session_id: sessionId,
+        transcript: existingTranscript,
+        incremental: "",
+        is_final: isFinal,
+      }
+    }
+    
+    // Word-by-word comparison to find overlap and extract new content
+    const existingWords = normalizedExisting.split(/\s+/).filter(w => w.length > 0)
+    const newWords = normalizedTranscript.split(/\s+/).filter(w => w.length > 0)
+    
+    // Find the longest matching suffix of existing that matches a prefix of new
+    // This handles cases where transcription slightly changes previous words
+    let bestMatch = 0
+    for (let i = Math.min(existingWords.length, newWords.length); i > 0; i--) {
+      const existingSuffix = existingWords.slice(-i).join(" ")
+      const newPrefix = newWords.slice(0, i).join(" ")
+      
+      // Normalize for comparison (case-insensitive, ignore punctuation differences)
+      const normalizedSuffix = existingSuffix.toLowerCase().replace(/[.,!?;:]/g, "")
+      const normalizedPrefix = newPrefix.toLowerCase().replace(/[.,!?;:]/g, "")
+      
+      if (normalizedSuffix === normalizedPrefix) {
+        bestMatch = i
+        break
+      }
+    }
+    
+    // If we found a good match, extract only the new words
+    if (bestMatch > 0 && bestMatch < newWords.length) {
+      const incremental = newWords.slice(bestMatch).join(" ")
+      const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
+      
+      return {
+        session_id: sessionId,
+        transcript: mergedTranscript,
+        incremental,
+        is_final: isFinal,
+      }
+    }
+    
+    // If new transcript is significantly longer, it might be a correction or new content
+    // Only accept if it's at least 50% longer to avoid false positives
+    if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
+      // Check for any word overlap at all
+      const existingWordSet = new Set(existingWords.map(w => w.toLowerCase()))
+      const newWordSet = new Set(newWords.map(w => w.toLowerCase()))
+      const overlap = [...newWordSet].filter(w => existingWordSet.has(w)).length
+      
+      // If less than 30% overlap, treat as new content
+      if (overlap / newWordSet.size < 0.3) {
+        return {
+          session_id: sessionId,
+          transcript: normalizedTranscript,
+          incremental: normalizedTranscript,
           is_final: isFinal,
         }
       }
     }
     
-    // Case 3: New transcript starts with existing transcript (legitimate continuation)
-    // Extract only the new part
-    let incremental = normalizedTranscript
-    if (normalizedExisting && normalizedTranscript.startsWith(normalizedExisting)) {
-      // Extract the new part after the existing transcript
-      incremental = normalizedTranscript.slice(normalizedExisting.length).trim()
-      // If no new content, return existing
-      if (!incremental) {
-        return {
-          session_id: sessionId,
-          transcript: existingTranscript,
-          incremental: "",
-          is_final: isFinal,
-        }
-      }
-    } else if (normalizedExisting) {
-      // New transcript doesn't start with existing - might be a different interpretation
-      // Only merge if it's clearly new content (longer than existing)
-      if (normalizedTranscript.length > normalizedExisting.length) {
-        // Extract what appears to be new by comparing word-by-word
-        const existingWords = normalizedExisting.split(/\s+/)
-        const newWords = normalizedTranscript.split(/\s+/)
-        
-        // Check if new transcript starts with existing words (partial match)
-        let matchingWords = 0
-        for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
-          if (existingWords[i] === newWords[i]) {
-            matchingWords++
-          } else {
-            break
-          }
-        }
-        
-        // If significant overlap, extract only new words
-        if (matchingWords > 0 && matchingWords < newWords.length) {
-          incremental = newWords.slice(matchingWords).join(" ")
+    // Default: if new transcript is longer, append it (might be a correction)
+    // Otherwise, keep existing to avoid duplicates
+    if (normalizedTranscript.length > normalizedExisting.length) {
+      // Try to extract new words by finding common prefix
+      let commonPrefixLength = 0
+      for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
+        if (existingWords[i].toLowerCase() === newWords[i].toLowerCase()) {
+          commonPrefixLength = i + 1
         } else {
-          // No clear overlap, treat as completely new (might be a correction)
-          incremental = normalizedTranscript
+          break
         }
-      } else {
-        // Shorter or same length but doesn't start with existing - likely duplicate
+      }
+      
+      if (commonPrefixLength < newWords.length) {
+        const incremental = newWords.slice(commonPrefixLength).join(" ")
+        const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
+        
         return {
           session_id: sessionId,
-          transcript: existingTranscript,
-          incremental: "",
+          transcript: mergedTranscript,
+          incremental,
           is_final: isFinal,
         }
       }
     }
     
-    // Merge with existing transcript
-    const mergedTranscript = normalizedExisting 
-      ? `${normalizedExisting} ${incremental}`.trim()
-      : normalizedTranscript
-
+    // Fallback: return existing to prevent duplicates
     return {
       session_id: sessionId,
-      transcript: mergedTranscript,
-      incremental,
+      transcript: existingTranscript,
+      incremental: "",
       is_final: isFinal,
     }
   } catch (error: any) {

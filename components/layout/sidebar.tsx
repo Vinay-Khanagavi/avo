@@ -49,7 +49,7 @@ export function Sidebar() {
       <div className="p-4 border-t">
         <Button
           variant="ghost"
-          className="w-full justify-start hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+          className="w-full justify-start hover:bg-red-500 hover:text-white"
           onClick={() => signOut({ callbackUrl: "/" })}
         >
           <LogOut className="mr-2 h-4 w-4" />

@@ -95,43 +95,84 @@ def merge_transcripts(existing_text: str, new_text: str) -> str:
 
 def merge_at_word_boundary(existing_text: str, new_text: str) -> str:
     """
-    Alternative merging strategy that ensures we merge at word boundaries.
-    More conservative approach.
+    Improved merging strategy that prevents duplicates and handles word boundaries.
+    More aggressive duplicate detection to prevent sentence repetition.
     """
-    if not existing_text:
-        return new_text.strip()
+    existing_normalized = existing_text.strip()
+    new_normalized = new_text.strip()
     
-    if not new_text:
-        return existing_text.strip()
+    if not existing_normalized:
+        return new_normalized
     
-    # Find overlap
-    overlap_start, overlap_end = find_overlap(existing_text, new_text)
+    if not new_normalized:
+        return existing_normalized
     
-    if overlap_start == 0 and overlap_end == 0:
-        # No overlap, append with space
-        return f"{existing_text} {new_text}".strip()
+    # Check for exact duplicates
+    if existing_normalized == new_normalized:
+        return existing_normalized
     
-    # Find word boundaries around the overlap
-    # Get the last few words of existing_text
-    existing_words = existing_text.split()
-    new_words = new_text.split()
+    # Check if new text is entirely contained in existing (duplicate)
+    if new_normalized in existing_normalized:
+        return existing_normalized
+    
+    # Check if new text contains entire existing text (legitimate continuation)
+    if new_normalized.startswith(existing_normalized):
+        # Extract only the new part
+        incremental = new_normalized[len(existing_normalized):].strip()
+        if incremental:
+            return f"{existing_normalized} {incremental}".strip()
+        return existing_normalized
+    
+    # Word-by-word comparison to find overlap
+    existing_words = [w for w in existing_normalized.split() if w]
+    new_words = [w for w in new_normalized.split() if w]
     
     if not existing_words or not new_words:
-        return merge_transcripts(existing_text, new_text)
+        return merge_transcripts(existing_normalized, new_normalized)
     
-    # Try to find overlap at word level
-    # Check if last few words of existing match first few words of new
+    # Find the longest matching suffix of existing that matches a prefix of new
+    # This handles cases where transcription slightly changes previous words
+    best_match = 0
     for i in range(min(len(existing_words), len(new_words)), 0, -1):
-        existing_suffix = ' '.join(existing_words[-i:]).lower()
-        new_prefix = ' '.join(new_words[:i]).lower()
+        existing_suffix = ' '.join(existing_words[-i:])
+        new_prefix = ' '.join(new_words[:i])
         
-        if existing_suffix == new_prefix:
-            # Found word-level overlap
-            new_portion = ' '.join(new_words[i:])
-            if new_portion:
-                return f"{existing_text} {new_portion}".strip()
-            return existing_text.strip()
+        # Normalize for comparison (case-insensitive, ignore punctuation)
+        existing_suffix_norm = existing_suffix.lower().replace('.', '').replace(',', '').replace('!', '').replace('?', '').replace(';', '').replace(':', '')
+        new_prefix_norm = new_prefix.lower().replace('.', '').replace(',', '').replace('!', '').replace('?', '').replace(';', '').replace(':', '')
+        
+        if existing_suffix_norm == new_prefix_norm:
+            best_match = i
+            break
     
-    # Fall back to character-level merging
-    return merge_transcripts(existing_text, new_text)
+    # If we found a good match, extract only the new words
+    if best_match > 0 and best_match < len(new_words):
+        incremental = ' '.join(new_words[best_match:])
+        return f"{existing_normalized} {incremental}".strip()
+    
+    # If new transcript is significantly longer, check for word overlap
+    # Only accept if it's at least 50% longer to avoid false positives
+    if len(new_normalized) > len(existing_normalized) * 1.5:
+        existing_word_set = set(w.lower() for w in existing_words)
+        new_word_set = set(w.lower() for w in new_words)
+        overlap = len([w for w in new_word_set if w in existing_word_set])
+        
+        # If less than 30% overlap, treat as new content
+        if len(new_word_set) > 0 and overlap / len(new_word_set) < 0.3:
+            return new_normalized
+    
+    # Try to find common prefix
+    common_prefix_length = 0
+    for i in range(min(len(existing_words), len(new_words))):
+        if existing_words[i].lower() == new_words[i].lower():
+            common_prefix_length = i + 1
+        else:
+            break
+    
+    if common_prefix_length < len(new_words):
+        incremental = ' '.join(new_words[common_prefix_length:])
+        return f"{existing_normalized} {incremental}".strip()
+    
+    # Fallback: return existing to prevent duplicates
+    return existing_normalized
 

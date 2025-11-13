@@ -11,6 +11,7 @@ import {
   sendChunkWithRetry,
   finalizeSession,
 } from "@/lib/whisper-stream"
+import { applyDictionaryReplacements, fetchDictionaryWords } from "@/lib/dictionary-replace"
 
 export default function DictationPage() {
   const [transcript, setTranscript] = useState("")
@@ -19,6 +20,7 @@ export default function DictationPage() {
   const { isRecording, setIsRecording } = useRecording()
   const sessionIdRef = useRef<string | null>(null)
   const pendingChunksRef = useRef<Blob[]>([])
+  const dictionaryRef = useRef<Array<{ word: string; substitution?: string | null }>>([])
 
   // Load transcription service from localStorage
   useEffect(() => {
@@ -67,31 +69,17 @@ export default function DictationPage() {
     pendingChunksRef.current = []
 
     try {
-      // Fetch dictionary words to include in transcription prompt
-      let prompt = ""
+      // Fetch dictionary words for post-transcription replacement (no AI needed)
       try {
-        const dictResponse = await fetch("/api/dictionary")
-        if (dictResponse.ok) {
-          const dictData = await dictResponse.json()
-          const words = dictData.words || []
-          if (words.length > 0) {
-            // Build prompt with dictionary words
-            const wordList = words.map((w: { word: string; substitution?: string | null }) => {
-              if (w.substitution) {
-                return `${w.word} (should be transcribed as: ${w.substitution})`
-              }
-              return w.word
-            }).join(", ")
-            prompt = `Please use the following dictionary words when transcribing: ${wordList}.`
-          }
-        }
+        const words = await fetchDictionaryWords()
+        dictionaryRef.current = words
       } catch (dictError) {
         console.warn("Failed to fetch dictionary words:", dictError)
-        // Continue without dictionary words if fetch fails
+        dictionaryRef.current = []
       }
 
-      // Create transcription session with selected service and dictionary prompt
-      const session = await createTranscriptionSession(prompt || undefined, selectedService)
+      // Create transcription session (no prompt needed - we'll do text replacement after)
+      const session = await createTranscriptionSession(undefined, selectedService)
       sessionIdRef.current = session.sessionId
     } catch (error: any) {
       console.error("Error creating session:", error)
@@ -111,7 +99,12 @@ export default function DictationPage() {
         for (const chunk of pendingChunksRef.current) {
           try {
             const response = await sendChunkWithRetry(sessionIdRef.current, chunk, selectedService)
-            setTranscript(response.transcript)
+            // Apply dictionary replacements (simple text replacement, no AI)
+            const processedTranscript = applyDictionaryReplacements(
+              response.transcript,
+              dictionaryRef.current
+            )
+            setTranscript(processedTranscript)
           } catch (error) {
             console.error("Error processing pending chunk:", error)
           }
@@ -122,7 +115,12 @@ export default function DictationPage() {
       // Finalize session
       if (sessionIdRef.current) {
         const finalResponse = await finalizeSession(sessionIdRef.current, selectedService)
-        setTranscript(finalResponse.transcript)
+        // Apply dictionary replacements (simple text replacement, no AI)
+        const processedTranscript = applyDictionaryReplacements(
+          finalResponse.transcript,
+          dictionaryRef.current
+        )
+        setTranscript(processedTranscript)
         sessionIdRef.current = null
       }
     } catch (error) {
@@ -144,7 +142,12 @@ export default function DictationPage() {
       try {
         // Send chunk immediately for real-time transcription
         const response = await sendChunkWithRetry(sessionIdRef.current, chunk, selectedService)
-        setTranscript(response.transcript)
+        // Apply dictionary replacements (simple text replacement, no AI)
+        const processedTranscript = applyDictionaryReplacements(
+          response.transcript,
+          dictionaryRef.current
+        )
+        setTranscript(processedTranscript)
       } catch (error) {
         console.error("Error processing chunk:", error)
         // Queue failed chunk for retry on stop

@@ -6,6 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DictionaryForm } from "./dictionary-form"
 import { Plus, Edit, Trash2, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface DictionaryWord {
   id: string
@@ -20,6 +28,8 @@ export function DictionaryList() {
   const [searchQuery, setSearchQuery] = useState("")
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingWord, setEditingWord] = useState<DictionaryWord | undefined>()
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [wordToDelete, setWordToDelete] = useState<DictionaryWord | null>(null)
 
   const fetchWords = async () => {
     try {
@@ -39,18 +49,23 @@ export function DictionaryList() {
     fetchWords()
   }, [])
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this word?")) {
-      return
-    }
+  const handleDeleteClick = (word: DictionaryWord) => {
+    setWordToDelete(word)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!wordToDelete) return
 
     try {
-      const response = await fetch(`/api/dictionary?id=${id}`, {
+      const response = await fetch(`/api/dictionary?id=${wordToDelete.id}`, {
         method: "DELETE",
       })
 
       if (response.ok) {
         fetchWords()
+        setDeleteDialogOpen(false)
+        setWordToDelete(null)
       }
     } catch (error) {
       console.error("Error deleting word:", error)
@@ -132,7 +147,8 @@ export function DictionaryList() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(word.id)}
+                        onClick={() => handleDeleteClick(word)}
+                        className="hover:bg-red-500 hover:text-white"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -151,6 +167,34 @@ export function DictionaryList() {
         onSuccess={fetchWords}
         editingWord={editingWord}
       />
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Word</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{wordToDelete?.word}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false)
+                setWordToDelete(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteConfirm}
+              className="bg-red-500 text-white hover:bg-red-600"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
