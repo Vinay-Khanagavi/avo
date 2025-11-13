@@ -120,7 +120,7 @@ For EC2 t2.micro (1GB RAM), use `base` model only.
 
 ### EC2 Free Tier Deployment
 
-See `deploy-ec2-free-tier.sh` for automated deployment script.
+See `deploy-ec2.sh` for automated deployment script, or `DEPLOYMENT_GUIDE.md` for comprehensive guide.
 
 ### Manual EC2 Setup
 

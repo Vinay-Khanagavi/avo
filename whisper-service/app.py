@@ -41,6 +41,24 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(title="Whisper Transcription Service", version="1.0.0")
 
+
+@app.on_event("startup")
+async def startup_event():
+    """Pre-load Whisper model on startup for faster first request."""
+    logger.info("Application startup - pre-loading Whisper model...")
+    try:
+        # Pre-load the model in background
+        import threading
+        def preload_model():
+            get_whisper_model()
+            logger.info("✅ Whisper model pre-loaded successfully on startup")
+        
+        thread = threading.Thread(target=preload_model, daemon=True)
+        thread.start()
+        logger.info("Model pre-loading initiated in background")
+    except Exception as e:
+        logger.warning(f"Failed to pre-load model on startup: {e}. Will load on first request.")
+
 # CORS configuration - restrict origins in production
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
 ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()]
@@ -243,9 +261,18 @@ class ChunkResponse(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint. Also triggers model loading if not already loaded."""
     redis_connected = False
     active_sessions = 0
+    model_loaded = whisper_model is not None
+    
+    # Trigger model load if not loaded (for warmup)
+    if not model_loaded:
+        try:
+            get_whisper_model()
+            model_loaded = True
+        except Exception as e:
+            logger.warning(f"Model loading failed during health check: {e}")
     
     if redis_client:
         try:
@@ -264,8 +291,10 @@ async def health_check():
         "status": "healthy",
         "model": WHISPER_MODEL,
         "device": WHISPER_DEVICE,
+        "model_loaded": model_loaded,
         "redis_connected": redis_connected,
-        "active_sessions": active_sessions
+        "active_sessions": active_sessions,
+        "ready": model_loaded  # Indicates if ready to process requests
     }
 
 

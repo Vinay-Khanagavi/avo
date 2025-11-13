@@ -1,19 +1,23 @@
 #!/bin/bash
 
-# EC2 Free Tier Deployment Script for Whisper Service
-# This script automates the deployment of Whisper service on EC2 t2.micro instance
+# EC2 Deployment Script for Whisper Service
+# Optimized for performance - supports t3.small/medium for faster transcription
+# This script automates the deployment of Whisper service on EC2
 
 set -e
 
-echo "=== Whisper Service EC2 Deployment ==="
+echo "=== Whisper Service EC2 Deployment (Optimized) ==="
 
 # Configuration
-INSTANCE_TYPE="t2.micro"
-# AMI_ID will be dynamically resolved below
+# For better performance, use t3.small (2GB RAM) or t3.medium (4GB RAM)
+# t2.micro (1GB RAM) is free tier but slower - only supports 'base' model
+INSTANCE_TYPE="${INSTANCE_TYPE:-t3.small}"  # Default to t3.small for better performance
 KEY_NAME="${AWS_KEY_NAME:-whisper-key}"  # Set AWS_KEY_NAME env var or use default
 SECURITY_GROUP_NAME="whisper-service-sg"
 REGION="${AWS_REGION:-us-east-1}"
 ALLOWED_IP="${ALLOWED_IP:-}"  # Set ALLOWED_IP env var to restrict access (e.g., "1.2.3.4/32")
+WHISPER_MODEL="${WHISPER_MODEL:-base}"  # Model: tiny, base, small, medium, large
+AUTO_DEPLOY="${AUTO_DEPLOY:-true}"  # Auto-deploy service via user-data
 
 # Check AWS CLI
 if ! command -v aws &> /dev/null; then
@@ -115,13 +119,26 @@ else
 fi
 
 echo ""
-echo "Step 2: Launching EC2 t2.micro instance..."
+echo "Step 2: Launching EC2 instance ($INSTANCE_TYPE)..."
+
+# Performance recommendations
+if [ "$INSTANCE_TYPE" == "t2.micro" ]; then
+    echo "⚠️  Warning: t2.micro has limited RAM (1GB). Only 'base' model recommended."
+    echo "   For better performance, use: export INSTANCE_TYPE=t3.small"
+elif [ "$INSTANCE_TYPE" == "t3.small" ]; then
+    echo "✅ Good choice: t3.small (2GB RAM) supports 'base' and 'small' models"
+elif [ "$INSTANCE_TYPE" == "t3.medium" ]; then
+    echo "✅ Excellent: t3.medium (4GB RAM) supports all models up to 'medium'"
+fi
 
 # Check if user-data script exists and use it
 USER_DATA_ARG=""
-if [ -f "user-data.sh" ]; then
-    echo "Found user-data.sh, including in instance launch..."
+if [ -f "user-data.sh" ] && [ "$AUTO_DEPLOY" == "true" ]; then
+    echo "Found user-data.sh, including in instance launch for auto-deployment..."
     USER_DATA_ARG="--user-data file://user-data.sh"
+elif [ "$AUTO_DEPLOY" == "true" ]; then
+    echo "⚠️  Warning: user-data.sh not found. Auto-deployment disabled."
+    echo "   Service will need to be deployed manually."
 fi
 
 INSTANCE_ID=$(aws ec2 run-instances \
@@ -196,12 +213,33 @@ echo ""
 echo "6. Health check:"
 echo "   curl http://$PUBLIC_IP:8000/health"
 echo ""
+echo "=== Performance Optimization ==="
+echo "To keep the service warm and fast:"
+echo "1. SSH into the instance and run warmup script:"
+echo "   ssh -i ~/.ssh/$KEY_NAME.pem ubuntu@$PUBLIC_IP"
+echo "   cd whisper-service && ./warmup.sh"
+echo ""
+echo "2. Or set up automatic warmup (keeps service ready):"
+echo "   (crontab -l 2>/dev/null; echo \"*/5 * * * * curl -s http://localhost:8000/health > /dev/null\") | crontab -"
+echo ""
 echo "=== Important Notes ==="
-echo "- This instance is FREE for 12 months (AWS Free Tier)"
-echo "- Stop the instance after Nov 15 to avoid charges:"
+if [ "$INSTANCE_TYPE" == "t2.micro" ]; then
+    echo "- This instance is FREE for 12 months (AWS Free Tier)"
+    echo "- Stop the instance when not in use to avoid charges:"
+else
+    echo "- Instance type: $INSTANCE_TYPE (not free tier - ~\$$(if [ "$INSTANCE_TYPE" == "t3.small" ]; then echo "15"; elif [ "$INSTANCE_TYPE" == "t3.medium" ]; then echo "30"; else echo "varies"; fi)/month)"
+    echo "- Stop the instance when not in use to save costs:"
+fi
 echo "  aws ec2 stop-instances --instance-ids $INSTANCE_ID --region $REGION"
 echo "- To terminate (deletes everything):"
 echo "  aws ec2 terminate-instances --instance-ids $INSTANCE_ID --region $REGION"
+echo ""
+echo "=== Service URL ==="
+echo "Whisper Service: http://$PUBLIC_IP:8000"
+echo "Health Check: http://$PUBLIC_IP:8000/health"
+echo ""
+echo "Configure your Railway/Next.js app with:"
+echo "  WHISPER_SERVICE_URL=http://$PUBLIC_IP:8000"
 echo ""
 echo "Instance ID: $INSTANCE_ID"
 echo "Public IP: $PUBLIC_IP"

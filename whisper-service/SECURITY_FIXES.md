@@ -6,7 +6,7 @@ This document summarizes the critical, high, and medium priority issues that hav
 
 ### 1. Invalid AMI ID
 - **Fixed**: Deploy script now dynamically resolves the latest Ubuntu 22.04 LTS AMI ID using AWS CLI
-- **Location**: `deploy-ec2-free-tier.sh`
+- **Location**: `deploy-ec2.sh`
 - **Details**: Script queries AWS for the latest available Ubuntu 22.04 AMI instead of using a hardcoded, potentially outdated AMI ID
 
 ### 2. Security Group Configuration
@@ -14,14 +14,14 @@ This document summarizes the critical, high, and medium priority issues that hav
   - Added SSH port (22) to security group (required for initial setup)
   - Made port 8000 access configurable via `ALLOWED_IP` environment variable
   - Added warnings when port 8000 is open to 0.0.0.0/0
-- **Location**: `deploy-ec2-free-tier.sh`
+- **Location**: `deploy-ec2.sh`
 - **Usage**: Set `ALLOWED_IP` environment variable to restrict access (e.g., `export ALLOWED_IP="1.2.3.4/32"`)
 
 ## High Priority Issues Fixed ✅
 
 ### 3. Hardcoded Key Pair Name
 - **Fixed**: Key pair name is now configurable via `AWS_KEY_NAME` environment variable
-- **Location**: `deploy-ec2-free-tier.sh`
+- **Location**: `deploy-ec2.sh`
 - **Default**: Falls back to `whisper-key` if not set
 - **Validation**: Script validates that the key pair exists before deployment
 
@@ -110,7 +110,7 @@ See `.env.example` for all available configuration options. Key variables:
 
 2. Run deploy script:
    ```bash
-   ./deploy-ec2-free-tier.sh
+   ./deploy-ec2.sh
    ```
 
 3. Configure service:

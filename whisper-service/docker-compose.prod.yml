@@ -1,0 +1,50 @@
+version: '3.8'
+
+# Production-optimized docker-compose for AWS EC2
+# Pre-loads model on startup for faster first request
+
+services:
+  whisper-service:
+    build: .
+    container_name: whisper-service
+    ports:
+      - "8000:8000"
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+      - MAX_SESSIONS=${MAX_SESSIONS:-10}
+      - SESSION_TTL=${SESSION_TTL:-600}
+      - BUFFER_OVERLAP_SECONDS=${BUFFER_OVERLAP_SECONDS:-2.0}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - WHISPER_API_KEY=${WHISPER_API_KEY:-}
+      - REQUIRE_API_KEY=${REQUIRE_API_KEY:-true}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - PORT=8000
+    volumes:
+      - whisper-models:/root/.cache/whisper  # Persistent model cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s  # Give time for model to load
+    # Standard command - use warmup.sh script instead for pre-loading
+    # Pre-loading is handled by warmup.sh script after container starts
+
+  redis:
+    image: redis:7-alpine
+    container_name: whisper-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  whisper-models:
+    driver: local
+  redis-data:
+    driver: local
+
