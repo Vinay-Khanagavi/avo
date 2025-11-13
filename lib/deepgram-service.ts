@@ -4,6 +4,7 @@
 
 export interface DeepgramSession {
   sessionId: string
+  prompt?: string
 }
 
 export interface DeepgramChunkResponse {
@@ -35,6 +36,7 @@ export async function createDeepgramSession(
   
   return {
     sessionId,
+    prompt,
   }
 }
 
@@ -45,7 +47,8 @@ export async function transcribeDeepgramChunk(
   sessionId: string,
   audioChunk: Buffer,
   existingTranscript: string = "",
-  customApiKey?: string
+  customApiKey?: string,
+  prompt?: string
 ): Promise<DeepgramChunkResponse> {
   const apiKey = getDeepgramApiKey(customApiKey)
   if (!apiKey) {
@@ -53,11 +56,35 @@ export async function transcribeDeepgramChunk(
   }
 
   try {
+    // Build query parameters including prompt if provided
+    const params = new URLSearchParams({
+      model: "nova-2",
+      punctuate: "true",
+      language: "en",
+      smart_format: "true",
+    })
+    
+    // Add prompt as keywords if provided (Deepgram uses keywords parameter)
+    if (prompt) {
+      // Extract words from prompt for Deepgram keywords
+      const words = prompt
+        .replace(/Please use the following dictionary words when transcribing:/i, "")
+        .replace(/\(should be transcribed as:[^)]+\)/g, "")
+        .split(",")
+        .map(w => w.trim())
+        .filter(w => w.length > 0)
+        .slice(0, 100) // Limit to 100 keywords
+      
+      if (words.length > 0) {
+        params.append("keywords", words.join(","))
+      }
+    }
+    
     // Deepgram prerecorded transcription endpoint
     // Using nova-2 model for better accuracy
     // Note: Deepgram expects audio/webm or other supported formats
     const response = await fetch(
-      `${DEEPGRAM_API_URL}/listen?model=nova-2&punctuate=true&language=en&smart_format=true`,
+      `${DEEPGRAM_API_URL}/listen?${params.toString()}`,
       {
         method: "POST",
         headers: {

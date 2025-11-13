@@ -67,8 +67,31 @@ export default function DictationPage() {
     pendingChunksRef.current = []
 
     try {
-      // Create transcription session with selected service
-      const session = await createTranscriptionSession(undefined, selectedService)
+      // Fetch dictionary words to include in transcription prompt
+      let prompt = ""
+      try {
+        const dictResponse = await fetch("/api/dictionary")
+        if (dictResponse.ok) {
+          const dictData = await dictResponse.json()
+          const words = dictData.words || []
+          if (words.length > 0) {
+            // Build prompt with dictionary words
+            const wordList = words.map((w: { word: string; substitution?: string | null }) => {
+              if (w.substitution) {
+                return `${w.word} (should be transcribed as: ${w.substitution})`
+              }
+              return w.word
+            }).join(", ")
+            prompt = `Please use the following dictionary words when transcribing: ${wordList}.`
+          }
+        }
+      } catch (dictError) {
+        console.warn("Failed to fetch dictionary words:", dictError)
+        // Continue without dictionary words if fetch fails
+      }
+
+      // Create transcription session with selected service and dictionary prompt
+      const session = await createTranscriptionSession(prompt || undefined, selectedService)
       sessionIdRef.current = session.sessionId
     } catch (error: any) {
       console.error("Error creating session:", error)

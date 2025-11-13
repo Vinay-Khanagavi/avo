@@ -17,7 +17,7 @@ const WHISPER_API_KEY = process.env.WHISPER_API_KEY || ""
 
 // In-memory session storage for Deepgram and AssemblyAI
 // In production, consider using Redis or a database
-const sessionStorage = new Map<string, { transcript: string; service: string }>()
+const sessionStorage = new Map<string, { transcript: string; service: string; prompt?: string }>()
 
 /**
  * Create a new transcription session
@@ -56,12 +56,14 @@ export async function POST(request: NextRequest) {
           try {
             const sessionData = sessionStorage.get(sessionId)
             const existingTranscript = sessionData?.transcript || ""
+            const prompt = sessionData?.prompt
 
             const result = await transcribeDeepgramChunk(
               sessionId,
               audioBuffer,
               existingTranscript,
-              customApiKey || undefined
+              customApiKey || undefined,
+              prompt
             )
 
             // Update session storage
@@ -82,12 +84,14 @@ export async function POST(request: NextRequest) {
           try {
             const sessionData = sessionStorage.get(sessionId)
             const existingTranscript = sessionData?.transcript || ""
+            const prompt = sessionData?.prompt
 
             const result = await transcribeAssemblyAIChunk(
               sessionId,
               audioBuffer,
               existingTranscript,
-              customApiKey || undefined
+              customApiKey || undefined,
+              prompt
             )
 
             // Update session storage
@@ -169,6 +173,7 @@ export async function POST(request: NextRequest) {
           sessionStorage.set(session.sessionId, {
             transcript: "",
             service: "deepgram",
+            prompt: body.prompt,
           })
           return NextResponse.json({ session_id: session.sessionId, status: "created" })
         } catch (error: any) {
@@ -184,6 +189,7 @@ export async function POST(request: NextRequest) {
           sessionStorage.set(session.sessionId, {
             transcript: "",
             service: "assemblyai",
+            prompt: body.prompt,
           })
           return NextResponse.json({ session_id: session.sessionId, status: "created" })
         } catch (error: any) {

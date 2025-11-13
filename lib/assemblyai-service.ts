@@ -4,6 +4,7 @@
 
 export interface AssemblyAISession {
   sessionId: string
+  prompt?: string
 }
 
 export interface AssemblyAIChunkResponse {
@@ -35,6 +36,7 @@ export async function createAssemblyAISession(
   
   return {
     sessionId,
+    prompt,
   }
 }
 
@@ -45,7 +47,8 @@ export async function transcribeAssemblyAIChunk(
   sessionId: string,
   audioChunk: Buffer,
   existingTranscript: string = "",
-  customApiKey?: string
+  customApiKey?: string,
+  prompt?: string
 ): Promise<AssemblyAIChunkResponse> {
   const apiKey = getAssemblyAIApiKey(customApiKey)
   if (!apiKey) {
@@ -74,18 +77,37 @@ export async function transcribeAssemblyAIChunk(
     const audioUrl = uploadData.upload_url
 
     // Step 2: Start transcription job
+    const requestBody: any = {
+      audio_url: audioUrl,
+      language_code: "en",
+      punctuate: true,
+      format_text: true,
+    }
+    
+    // Add prompt if provided (AssemblyAI uses word_boost parameter)
+    if (prompt) {
+      // Extract words from prompt for word boost
+      const words = prompt
+        .replace(/Please use the following dictionary words when transcribing:/i, "")
+        .replace(/\(should be transcribed as:[^)]+\)/g, "")
+        .split(",")
+        .map(w => w.trim())
+        .filter(w => w.length > 0)
+        .slice(0, 100) // Limit to 100 words
+      
+      if (words.length > 0) {
+        // AssemblyAI uses word_boost parameter to prioritize certain words
+        requestBody.word_boost = words
+      }
+    }
+    
     const transcribeResponse = await fetch(`${ASSEMBLYAI_API_URL}/transcript`, {
       method: "POST",
       headers: {
         "authorization": apiKey,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        audio_url: audioUrl,
-        language_code: "en",
-        punctuate: true,
-        format_text: true,
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     if (!transcribeResponse.ok) {

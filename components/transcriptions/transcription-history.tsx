@@ -112,9 +112,9 @@ export function TranscriptionHistory() {
         <>
           <div className="space-y-4">
             {transcriptions.map((transcription) => (
-              <Card key={transcription.id}>
+              <Card key={transcription.id} className="group">
                 <CardContent className="p-4">
-                  <div className="flex justify-between items-start gap-4">
+                  <div className="flex justify-between items-start gap-4 relative">
                     <div className="flex-1">
                       <p className="text-sm text-muted-foreground mb-2">
                         {format(new Date(transcription.createdAt), "PPp")}
@@ -125,7 +125,7 @@ export function TranscriptionHistory() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleCopy(transcription.text, transcription.id)}
-                      className="shrink-0"
+                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       {copiedId === transcription.id ? (
                         <Check className="h-4 w-4 text-green-600" />
