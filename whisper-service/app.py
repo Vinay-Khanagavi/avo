@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 import redis
 
 from merge_transcripts import merge_at_word_boundary
+from grok_service import improve_transcript
 
 # Load environment variables
 load_dotenv()
@@ -251,6 +252,11 @@ def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key")):
 # Pydantic models
 class SessionCreate(BaseModel):
     prompt: Optional[str] = None
+    contentType: Optional[str] = None
+
+
+class FinalizeRequest(BaseModel):
+    contentType: Optional[str] = None
 
 
 class ChunkResponse(BaseModel):
@@ -322,17 +328,18 @@ async def create_session(
         raise HTTPException(status_code=503, detail="Maximum sessions reached")
     
     session_id = str(uuid.uuid4())
-    session_data = {
+    session_data_dict = {
         "session_id": session_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "transcript": "",
         "prompt": session_data.prompt,
+        "contentType": session_data.contentType,
         "chunk_count": 0,
         "last_chunk_time": None,
         "buffer_audio": None,  # Will store last 2 seconds of audio
     }
     
-    save_session(session_id, session_data)
+    save_session(session_id, session_data_dict)
     
     return {"session_id": session_id, "status": "created"}
 
@@ -641,8 +648,12 @@ async def process_chunk(
 
 
 @app.post("/api/v1/sessions/{session_id}/finalize")
-async def finalize_session(session_id: str, request_obj=Depends(verify_api_key)):
-    """Finalize a session and return complete transcript."""
+async def finalize_session(
+    session_id: str,
+    request: Request,
+    request_obj=Depends(verify_api_key)
+):
+    """Finalize a session and return complete transcript with Grok post-processing."""
     try:
         session = get_session(session_id)
         if not session:
@@ -654,7 +665,32 @@ async def finalize_session(session_id: str, request_obj=Depends(verify_api_key))
             logger.error(f"Invalid session type: {type(session)} for session {session_id}")
             raise HTTPException(status_code=500, detail="Invalid session data")
         
-        final_transcript = session.get("transcript", "")
+        # Get raw transcript
+        raw_transcript = session.get("transcript", "")
+        
+        # Get content type from request body or session
+        content_type = None
+        try:
+            body = await request.json()
+            content_type = body.get("contentType")
+        except:
+            # If no body or JSON parse fails, try to get from session
+            content_type = session.get("contentType")
+        
+        # If no content type from request, use session's contentType
+        if not content_type:
+            content_type = session.get("contentType")
+        
+        # Improve transcript using Grok API
+        final_transcript = raw_transcript
+        if raw_transcript and raw_transcript.strip():
+            try:
+                logger.info(f"Improving transcript for session {session_id} (content_type: {content_type})")
+                final_transcript = improve_transcript(raw_transcript, content_type)
+            except Exception as grok_error:
+                # Log error but continue with original transcript
+                logger.error(f"Error improving transcript with Grok: {grok_error}. Using original transcript.")
+                final_transcript = raw_transcript
         
         # Optionally delete session or mark as completed
         session["status"] = "completed"

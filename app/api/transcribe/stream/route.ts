@@ -16,10 +16,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const contentType = request.headers.get("content-type") || ""
+    const requestContentType = request.headers.get("content-type") || ""
 
     // Handle FormData (chunk upload)
-    if (contentType.includes("multipart/form-data")) {
+    if (requestContentType.includes("multipart/form-data")) {
       const formData = await request.formData()
       const action = formData.get("action") as string
       const sessionId = formData.get("sessionId") as string
@@ -72,11 +72,12 @@ export async function POST(request: NextRequest) {
           throw error
         }
       }
+      return NextResponse.json({ error: "Invalid action" }, { status: 400 })
     }
 
     // Handle JSON (create/finalize)
     const body = await request.json()
-    const { action, sessionId } = body
+    const { action, sessionId, contentType: bodyContentType } = body
 
     const headers: HeadersInit = {
       "Content-Type": "application/json",
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
         const response = await fetch(`${WHISPER_SERVICE_URL}/api/v1/sessions`, {
           method: "POST",
           headers,
-          body: JSON.stringify({ prompt: body.prompt }),
+          body: JSON.stringify({ prompt: body.prompt, contentType: bodyContentType }),
         })
 
         if (!response.ok) {
@@ -126,6 +127,7 @@ export async function POST(request: NextRequest) {
           {
             method: "POST",
             headers,
+            body: JSON.stringify({ contentType: bodyContentType }),
           }
         )
 

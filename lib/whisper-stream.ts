@@ -31,14 +31,15 @@ const WHISPER_API_KEY = process.env.NEXT_PUBLIC_WHISPER_API_KEY || ""
  * Uses Next.js API route as proxy
  */
 export async function createTranscriptionSession(
-  prompt?: string
+  prompt?: string,
+  contentType?: string
 ): Promise<TranscriptionSession> {
   const response = await fetch("/api/transcribe/stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ action: "create", prompt }),
+    body: JSON.stringify({ action: "create", prompt, contentType }),
   })
 
   if (!response.ok) {
@@ -141,14 +142,15 @@ export async function getSession(sessionId: string): Promise<SessionResponse> {
  * Uses Next.js API route as proxy
  */
 export async function finalizeSession(
-  sessionId: string
+  sessionId: string,
+  contentType?: string
 ): Promise<ChunkResponse> {
   const response = await fetch("/api/transcribe/stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ action: "finalize", sessionId }),
+    body: JSON.stringify({ action: "finalize", sessionId, contentType }),
   })
 
   if (!response.ok) {

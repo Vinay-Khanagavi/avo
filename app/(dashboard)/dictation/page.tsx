@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { MainSection } from "@/components/dictation/main-section"
+import { MainSection, TabType } from "@/components/dictation/main-section"
 import { MicrophoneButton } from "@/components/dictation/microphone-button"
 import { TranscriptionDisplay } from "@/components/dictation/transcription-display"
 import { useRecording } from "@/contexts/recording-context"
@@ -17,16 +17,20 @@ export default function DictationPage() {
   const { isRecording, setIsRecording } = useRecording()
   const sessionIdRef = useRef<string | null>(null)
   const pendingChunksRef = useRef<Blob[]>([])
+  const contentTypeRef = useRef<TabType>("prompt")
 
-  const handleStart = async () => {
+  const handleStart = async (contentType?: TabType) => {
     setIsRecording(true)
     setTranscript("")
     sessionIdRef.current = null
     pendingChunksRef.current = []
+    if (contentType) {
+      contentTypeRef.current = contentType
+    }
 
     try {
-      // Create transcription session
-      const session = await createTranscriptionSession()
+      // Create transcription session with content type
+      const session = await createTranscriptionSession(undefined, contentTypeRef.current)
       sessionIdRef.current = session.sessionId
     } catch (error: any) {
       console.error("Error creating session:", error)
@@ -36,9 +40,12 @@ export default function DictationPage() {
     }
   }
 
-  const handleStop = async () => {
+  const handleStop = async (contentType?: TabType) => {
     setIsRecording(false)
     setIsProcessing(true)
+    if (contentType) {
+      contentTypeRef.current = contentType
+    }
 
     try {
       // Process any pending chunks first
@@ -54,9 +61,9 @@ export default function DictationPage() {
         pendingChunksRef.current = []
       }
 
-      // Finalize session
+      // Finalize session with content type
       if (sessionIdRef.current) {
-        const finalResponse = await finalizeSession(sessionIdRef.current)
+        const finalResponse = await finalizeSession(sessionIdRef.current, contentTypeRef.current)
         setTranscript(finalResponse.transcript)
         sessionIdRef.current = null
       }
@@ -67,6 +74,10 @@ export default function DictationPage() {
       setIsProcessing(false)
     }
   }
+
+  const handleContentTypeChange = useCallback((contentType: TabType) => {
+    contentTypeRef.current = contentType
+  }, [])
 
   const handleChunk = useCallback(
     async (chunk: Blob) => {
@@ -99,6 +110,7 @@ export default function DictationPage() {
         onStart={handleStart}
         onStop={handleStop}
         onChunk={handleChunk}
+        onContentTypeChange={handleContentTypeChange}
       />
     </div>
   )

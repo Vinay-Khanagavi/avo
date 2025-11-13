@@ -7,6 +7,7 @@ FastAPI microservice for streaming audio transcription using OpenAI Whisper with
 - **Streaming Transcription**: Process 5-second audio chunks as they arrive
 - **Buffer Overlap**: Maintains 2-second buffer for context-aware transcription
 - **Smart Merging**: Intelligently merges partial transcripts using text similarity
+- **AI-Powered Post-Processing**: Uses Groq API (Grok-compatible) to improve transcripts with context-aware formatting
 - **Session Management**: Redis-backed session state (falls back to in-memory)
 - **Rate Limiting**: Per-session and per-IP rate limits
 - **Authentication**: API key protection
@@ -104,7 +105,19 @@ X-API-Key: your-api-key
 - `BUFFER_OVERLAP_SECONDS`: Buffer overlap duration - default: `2.0`
 - `REDIS_URL`: Redis connection URL - default: `redis://localhost:6379`
 - `WHISPER_API_KEY`: API key for authentication (optional)
+- `GROQ_API_KEY`: Groq API key for transcript post-processing (optional, but recommended)
+- `GROQ_MODEL`: Groq model to use - default: `mixtral-8x7b-32768` (alternatives: `llama-3.1-70b-versatile`)
 - `PORT`: Server port - default: `8000`
+
+### Grok Post-Processing
+
+The service uses Groq API (Grok-compatible) to improve transcripts with context-aware formatting:
+- **Email**: Formats as professional email with proper structure
+- **Message**: Removes filler words, fixes grammar, maintains casual tone
+- **List**: Formats as numbered/bulleted list
+- **Prompt**: Improves clarity and structure for AI prompts
+
+If `GROQ_API_KEY` is not set, the service will return raw Whisper transcripts without post-processing.
 
 ## Model Selection
 

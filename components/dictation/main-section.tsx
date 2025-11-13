@@ -7,7 +7,7 @@ import { MicrophoneButton } from "@/components/dictation/microphone-button"
 import Link from "next/link"
 import { Mic, Check } from "lucide-react"
 
-type TabType = "prompt" | "message" | "list" | "email"
+export type TabType = "prompt" | "message" | "list" | "email"
 
 interface TabContent {
   heading: string
@@ -21,9 +21,10 @@ interface MainSectionProps {
   setTranscript?: (text: string) => void
   isRecording?: boolean
   isProcessing?: boolean
-  onStart?: () => void
-  onStop?: () => void
+  onStart?: (contentType?: TabType) => void
+  onStop?: (contentType?: TabType) => void
   onChunk?: (chunk: Blob) => void
+  onContentTypeChange?: (contentType: TabType) => void
 }
 
 const tabContents: Record<TabType, TabContent> = {
@@ -81,11 +82,19 @@ export function MainSection({
   onStart,
   onStop,
   onChunk,
+  onContentTypeChange,
 }: MainSectionProps) {
   const [activeTab, setActiveTab] = useState<TabType>("prompt")
   const contentRef = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLElement>(null)
   const isInteractive = !!onStart && !!onStop && !!onChunk
+
+  // Notify parent when active tab changes
+  useEffect(() => {
+    if (onContentTypeChange) {
+      onContentTypeChange(activeTab)
+    }
+  }, [activeTab, onContentTypeChange])
 
   const tabs = [
     { id: "prompt" as TabType, label: "Write the perfect prompt" },
@@ -128,7 +137,7 @@ export function MainSection({
         e.preventDefault()
         isSpacebarPressedRef.current = true
         if (onStart) {
-          onStart()
+          onStart(activeTab)
         }
       }
     }
@@ -142,7 +151,7 @@ export function MainSection({
         e.preventDefault()
         isSpacebarPressedRef.current = false
         if (isRecording && onStop) {
-          onStop()
+          onStop(activeTab)
         }
       }
     }
@@ -151,7 +160,7 @@ export function MainSection({
     const handleBlur = () => {
       if (isSpacebarPressedRef.current && isRecording && onStop) {
         isSpacebarPressedRef.current = false
-        onStop()
+        onStop(activeTab)
       }
     }
 
@@ -244,8 +253,8 @@ export function MainSection({
           {isInteractive ? (
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-stretch sm:items-center">
               <MicrophoneButton
-                onStart={onStart!}
-                onStop={onStop!}
+                onStart={() => onStart!(activeTab)}
+                onStop={() => onStop!(activeTab)}
                 onChunk={onChunk!}
                 isRecording={isRecording}
                 disabled={isProcessing}
