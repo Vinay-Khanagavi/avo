@@ -54,12 +54,15 @@ export async function transcribeAssemblyAIChunk(
 
   try {
     // Step 1: Upload audio chunk to AssemblyAI
+    // Convert Buffer to Uint8Array for fetch API compatibility
+    const uint8Array = new Uint8Array(audioChunk)
+    
     const uploadResponse = await fetch(`${ASSEMBLYAI_API_URL}/upload`, {
       method: "POST",
       headers: {
         "authorization": apiKey,
       },
-      body: audioChunk,
+      body: uint8Array,
     })
 
     if (!uploadResponse.ok) {
@@ -74,7 +77,7 @@ export async function transcribeAssemblyAIChunk(
     const transcribeResponse = await fetch(`${ASSEMBLYAI_API_URL}/transcript`, {
       method: "POST",
       headers: {
-        "authorization": ASSEMBLYAI_API_KEY,
+        "authorization": apiKey,
         "content-type": "application/json",
       },
       body: JSON.stringify({
@@ -104,7 +107,7 @@ export async function transcribeAssemblyAIChunk(
 
       const statusResponse = await fetch(`${ASSEMBLYAI_API_URL}/transcript/${transcriptId}`, {
         headers: {
-          "authorization": ASSEMBLYAI_API_KEY,
+          "authorization": apiKey,
         },
       })
 
@@ -124,13 +127,100 @@ export async function transcribeAssemblyAIChunk(
       attempts++
     }
 
-    // For incremental updates
-    const incremental = transcript
+    // Normalize transcript text
+    const normalizedTranscript = (transcript || "").trim()
+    const normalizedExisting = existingTranscript.trim()
+    
+    // Skip empty transcripts (silence/no speech detected)
+    if (!normalizedTranscript) {
+      return {
+        session_id: sessionId,
+        transcript: existingTranscript,
+        incremental: "",
+        is_final: isFinal,
+      }
+    }
+    
+    // Check for duplicates to prevent repetition during silence
+    // Case 1: New transcript exactly equals existing (duplicate)
+    if (normalizedExisting === normalizedTranscript) {
+      return {
+        session_id: sessionId,
+        transcript: existingTranscript,
+        incremental: "",
+        is_final: isFinal,
+      }
+    }
+    
+    // Case 2: New transcript is shorter than or equal to existing
+    // This likely indicates a duplicate/regression during silence
+    if (normalizedExisting && normalizedTranscript.length <= normalizedExisting.length) {
+      // Check if the new transcript is contained in existing (likely duplicate)
+      if (normalizedExisting.includes(normalizedTranscript)) {
+        return {
+          session_id: sessionId,
+          transcript: existingTranscript,
+          incremental: "",
+          is_final: isFinal,
+        }
+      }
+    }
+    
+    // Case 3: New transcript starts with existing transcript (legitimate continuation)
+    // Extract only the new part
+    let incremental = normalizedTranscript
+    if (normalizedExisting && normalizedTranscript.startsWith(normalizedExisting)) {
+      // Extract the new part after the existing transcript
+      incremental = normalizedTranscript.slice(normalizedExisting.length).trim()
+      // If no new content, return existing
+      if (!incremental) {
+        return {
+          session_id: sessionId,
+          transcript: existingTranscript,
+          incremental: "",
+          is_final: isFinal,
+        }
+      }
+    } else if (normalizedExisting) {
+      // New transcript doesn't start with existing - might be a different interpretation
+      // Only merge if it's clearly new content (longer than existing)
+      if (normalizedTranscript.length > normalizedExisting.length) {
+        // Extract what appears to be new by comparing word-by-word
+        const existingWords = normalizedExisting.split(/\s+/)
+        const newWords = normalizedTranscript.split(/\s+/)
+        
+        // Check if new transcript starts with existing words (partial match)
+        let matchingWords = 0
+        for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
+          if (existingWords[i] === newWords[i]) {
+            matchingWords++
+          } else {
+            break
+          }
+        }
+        
+        // If significant overlap, extract only new words
+        if (matchingWords > 0 && matchingWords < newWords.length) {
+          incremental = newWords.slice(matchingWords).join(" ")
+        } else {
+          // No clear overlap, treat as completely new (might be a correction)
+          incremental = normalizedTranscript
+        }
+      } else {
+        // Shorter or same length but doesn't start with existing - likely duplicate
+        return {
+          session_id: sessionId,
+          transcript: existingTranscript,
+          incremental: "",
+          is_final: isFinal,
+        }
+      }
+    }
     
     // Merge with existing transcript
-    const mergedTranscript = existingTranscript 
-      ? `${existingTranscript} ${transcript}`.trim()
-      : transcript
+    const mergedTranscript = normalizedExisting 
+      ? `${normalizedExisting} ${incremental}`.trim()
+      : normalizedTranscript
 
     return {
       session_id: sessionId,
