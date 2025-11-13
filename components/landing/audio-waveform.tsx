@@ -74,7 +74,7 @@ export function AudioWaveform({ className = "" }: AudioWaveformProps) {
 
       {/* Gradient Circle */}
       <div
-        className="gradient-circle absolute top-0 right-0 w-[442px] h-[409px] md:w-[442px] md:h-[409px] rounded-full opacity-70"
+        className="gradient-circle absolute top-40 right-50 w-[300px] h-[300px] md:w-[442px] md:h-[409px] rounded-full opacity-30"
         style={{
           background: "conic-gradient(from -39deg at 50% 50%, #0091ff 0deg, #fa24ce 67deg, #fc6d7b 187deg, #fd9a46 210deg, #f687c6 234deg, #4fb9fa 342deg)",
           mixBlendMode: "plus-lighter",
