@@ -1,18 +1,36 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { MicrophoneButton } from "@/components/dictation/microphone-button"
 import { TranscriptionDisplay } from "@/components/dictation/transcription-display"
+import {
+  createTranscriptionSession,
+  sendChunkWithRetry,
+  finalizeSession,
+} from "@/lib/whisper-stream"
 
 export default function DictationPage() {
   const [transcript, setTranscript] = useState("")
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [chunks, setChunks] = useState<Blob[]>([])
+  const sessionIdRef = useRef<string | null>(null)
+  const pendingChunksRef = useRef<Blob[]>([])
 
-  const handleStart = () => {
+  const handleStart = async () => {
     setIsRecording(true)
-    setChunks([])
+    setTranscript("")
+    sessionIdRef.current = null
+    pendingChunksRef.current = []
+
+    try {
+      // Create transcription session
+      const session = await createTranscriptionSession()
+      sessionIdRef.current = session.sessionId
+    } catch (error) {
+      console.error("Error creating session:", error)
+      setTranscript("[Error: Failed to start transcription session. Please try again.]")
+      setIsRecording(false)
+    }
   }
 
   const handleStop = async () => {
@@ -20,39 +38,53 @@ export default function DictationPage() {
     setIsProcessing(true)
 
     try {
-      // Send all chunks to the API
-      const formData = new FormData()
-      
-      // Combine all chunks into a single blob
-      const combinedBlob = new Blob(chunks, { type: "audio/webm" })
-      formData.append("audio", combinedBlob, "recording.webm")
-
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!response.ok) {
-        throw new Error("Transcription failed")
+      // Process any pending chunks first
+      if (pendingChunksRef.current.length > 0 && sessionIdRef.current) {
+        for (const chunk of pendingChunksRef.current) {
+          try {
+            const response = await sendChunkWithRetry(sessionIdRef.current, chunk)
+            setTranscript(response.transcript)
+          } catch (error) {
+            console.error("Error processing pending chunk:", error)
+          }
+        }
+        pendingChunksRef.current = []
       }
 
-      const data = await response.json()
-      setTranscript(data.transcript || "")
+      // Finalize session
+      if (sessionIdRef.current) {
+        const finalResponse = await finalizeSession(sessionIdRef.current)
+        setTranscript(finalResponse.transcript)
+        sessionIdRef.current = null
+      }
     } catch (error) {
-      console.error("Error transcribing:", error)
-      setTranscript((prev) => prev + "\n[Error: Transcription failed. Please try again.]")
+      console.error("Error finalizing transcription:", error)
+      setTranscript((prev) => prev + "\n[Error: Failed to finalize transcription. Please try again.]")
     } finally {
       setIsProcessing(false)
-      setChunks([])
     }
   }
 
-  const handleChunk = useCallback((chunk: Blob) => {
-    setChunks((prev) => [...prev, chunk])
-    
-    // Optionally send chunks in real-time for streaming transcription
-    // For now, we'll batch them and send on stop
-  }, [])
+  const handleChunk = useCallback(
+    async (chunk: Blob) => {
+      if (!sessionIdRef.current) {
+        // Session not ready yet, queue the chunk
+        pendingChunksRef.current.push(chunk)
+        return
+      }
+
+      try {
+        // Send chunk immediately for real-time transcription
+        const response = await sendChunkWithRetry(sessionIdRef.current, chunk)
+        setTranscript(response.transcript)
+      } catch (error) {
+        console.error("Error processing chunk:", error)
+        // Queue failed chunk for retry on stop
+        pendingChunksRef.current.push(chunk)
+      }
+    },
+    []
+  )
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">

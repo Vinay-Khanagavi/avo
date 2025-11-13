@@ -49,15 +49,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // For now, return a mock transcript since AWS Transcribe setup requires S3 bucket
-    // In production, you would:
-    // 1. Upload audio to S3
-    // 2. Start transcription job
-    // 3. Poll for completion
-    // 4. Retrieve transcript
+    // DEPRECATED: This endpoint is kept for backward compatibility
+    // New streaming transcription uses /api/transcribe/stream
+    // This endpoint can be removed in future versions
     
     // Mock response for development
-    const mockTranscript = "This is a mock transcription. Please configure AWS Transcribe with S3 bucket for production use."
+    const mockTranscript = "This endpoint is deprecated. Please use the streaming transcription API at /api/transcribe/stream for real-time transcription."
 
     // Save transcription to database
     if (mockTranscript.trim()) {
