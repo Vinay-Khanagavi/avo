@@ -91,7 +91,7 @@ export async function transcribeDeepgramChunk(
           "Authorization": `Token ${apiKey}`,
           "Content-Type": "audio/webm",
         },
-        body: audioChunk,
+        body: new Uint8Array(audioChunk),
       }
     )
 
