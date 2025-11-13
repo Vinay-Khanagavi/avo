@@ -2,7 +2,11 @@
 nixPkgs = ["nodejs_20", "yarn"]
 
 [phases.install]
-cmds = ["yarn install --frozen-lockfile"]
+cmds = ["yarn install --frozen-lockfile --network-timeout 600000 || yarn install --frozen-lockfile --network-timeout 600000"]
+
+[variables]
+YARN_NETWORK_TIMEOUT = "600000"
+YARN_NETWORK_CONCURRENCY = "1"
 
 [phases.build]
 cmds = ["yarn prisma generate", "yarn build"]
