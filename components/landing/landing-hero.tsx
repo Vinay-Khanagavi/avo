@@ -83,7 +83,7 @@ export function LandingHero() {
   return (
     <div
       ref={heroRef}
-      className={`min-h-screen flex flex-col items-center justify-center px-4 py-20 transition-all duration-1000 ease-out ${
+      className={`min-h-screen flex flex-col items-center justify-center px-4 pt-24 pb-20 transition-all duration-1000 ease-out ${
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
       }`}
     >
@@ -110,10 +110,14 @@ export function LandingHero() {
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Button asChild size="lg" variant="glow" className="text-base px-8 py-6 font-sans font-semibold">
+          <Button 
+            asChild 
+            size="lg" 
+            className="text-base px-10 py-6 font-sans font-semibold bg-black text-white rounded-full hover:bg-black hover:scale-110 transition-all duration-300 ease-out"
+          >
             <Link href="/signup">Get Started</Link>
           </Button>
-          <Button asChild variant="outline" size="lg" className="text-base px-8 py-6 font-sans font-medium">
+          <Button asChild variant="outline" size="lg" className="text-base px-10 py-6 font-sans font-medium rounded-full hover:bg-background hover:text-foreground">
             <Link href="/login">Sign In</Link>
           </Button>
         </div>

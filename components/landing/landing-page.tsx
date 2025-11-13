@@ -4,12 +4,16 @@ import { LandingHero, FeatureHighlights } from "./landing-hero"
 import { MouseTracker } from "./mouse-tracker"
 import { GrainOverlay } from "./grain-overlay"
 import { ArchitectureSection } from "./architecture-section"
+import { LandingHeader } from "./landing-header"
 
 export function LandingPage() {
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Gradient Background - Pastel colors from Unicorn Studio */}
       <div className="fixed inset-0 bg-gradient-to-br from-[#FFE5D9] via-[#FFD4B3] via-[#E6E6FA] to-[#B0C4DE] dark:from-[#2a1f2e] dark:via-[#1a1a2e] dark:to-[#16213e]" />
+      
+      {/* Header */}
+      <LandingHeader />
       
       {/* Mouse Tracker Circle */}
       <MouseTracker />
@@ -20,7 +24,9 @@ export function LandingPage() {
       {/* Content */}
       <div className="relative z-20">
         <LandingHero />
-        <ArchitectureSection />
+        <div id="architecture">
+          <ArchitectureSection />
+        </div>
         <FeatureHighlights />
         
         {/* Footer CTA */}
