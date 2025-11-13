@@ -107,7 +107,7 @@ export function DictionaryList() {
           placeholder="Search words..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-sm"
+          className="max-w-sm border-2 border-gray-300 dark:border-gray-600 focus-visible:border-gray-400 dark:focus-visible:border-gray-500"
         />
 
         {isLoading ? (
