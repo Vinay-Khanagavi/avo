@@ -108,16 +108,16 @@ export function LandingHero() {
         </div>
 
         {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center relative z-[100]">
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center relative z-100">
           <Button 
             asChild 
             size="lg" 
-            className="text-base px-10 py-6 font-sans font-semibold bg-black text-white rounded-full hover:bg-black hover:scale-110 transition-all duration-300 ease-out relative z-[100]"
+            className="text-base px-10 py-6 font-sans font-semibold bg-black text-white rounded-full hover:bg-black hover:scale-110 transition-all duration-300 ease-out relative z-100"
           >
-            <Link href="/signup" className="relative z-[100]">Get Started</Link>
+            <Link href="/signup" className="relative z-100">Get Started</Link>
           </Button>
-          <Button asChild variant="outline" size="lg" className="text-base px-10 py-6 font-sans font-medium rounded-full hover:bg-background hover:text-foreground relative z-[100]">
-            <Link href="/login" className="relative z-[100]">Sign In</Link>
+          <Button asChild variant="outline" size="lg" className="text-base px-10 py-6 font-sans font-medium rounded-full hover:bg-background hover:text-foreground relative z-100">
+            <Link href="/login" className="relative z-100">Sign In</Link>
           </Button>
         </div>
       </div>

@@ -79,7 +79,7 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
   return (
     <>
       <Select value={value} onValueChange={handleValueChange} disabled={disabled}>
-        <SelectTrigger className="w-full border-none shadow-none gap-1 focus-visible:ring-0 focus-visible:ring-offset-0">
+        <SelectTrigger className="h-11 w-full border-gray-300 bg-background text-base shadow-xs focus-visible:border-ring">
           <SelectValue>{getDisplayValue()}</SelectValue>
         </SelectTrigger>
         <SelectContent>

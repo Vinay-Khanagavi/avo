@@ -84,7 +84,7 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <Card>
+        <Card className="border-gray-300 shadow-md">
           <CardHeader>
             <CardTitle>Transcription Settings</CardTitle>
             <CardDescription>
@@ -95,7 +95,10 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <Label htmlFor="language">Language</Label>
               <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger id="language">
+                <SelectTrigger
+                  id="language"
+                  className="h-11 w-full border-gray-300 bg-background text-base shadow-xs focus-visible:border-ring"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -122,6 +125,7 @@ export default function SettingsPage() {
                 max="10"
                 value={chunkSize}
                 onChange={(e) => setChunkSize(e.target.value)}
+                className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
               />
               <p className="text-xs text-muted-foreground">
                 Smaller chunks provide faster transcription but may reduce accuracy.
@@ -141,11 +145,13 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            <Button onClick={handleSave}>Save Settings</Button>
+            <Button onClick={handleSave} className="h-11 px-6 shadow-sm">
+              Save Settings
+            </Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-gray-300 shadow-md">
           <CardHeader>
             <CardTitle>Account</CardTitle>
             <CardDescription>

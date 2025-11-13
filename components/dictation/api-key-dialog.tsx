@@ -53,7 +53,7 @@ export function ApiKeyDialog({ open, onOpenChange, onSave }: ApiKeyDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] sm:rounded-xl border-gray-300 p-8 shadow-xl dark:border-gray-700">
         <DialogHeader>
           <DialogTitle>Add Custom API Key</DialogTitle>
           <DialogDescription>
@@ -64,7 +64,10 @@ export function ApiKeyDialog({ open, onOpenChange, onSave }: ApiKeyDialogProps) 
           <div className="space-y-2">
             <Label htmlFor="service">Service</Label>
             <Select value={service} onValueChange={setService}>
-              <SelectTrigger id="service">
+              <SelectTrigger
+                id="service"
+                className="h-11 w-full border-gray-300 bg-background text-base shadow-xs focus-visible:border-ring"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -84,6 +87,7 @@ export function ApiKeyDialog({ open, onOpenChange, onSave }: ApiKeyDialogProps) 
                 placeholder="http://localhost:8000"
                 value={serviceUrl}
                 onChange={(e) => setServiceUrl(e.target.value)}
+                className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
               />
               <p className="text-xs text-muted-foreground">
                 Leave empty to use default AWS-hosted Whisper service
@@ -99,6 +103,7 @@ export function ApiKeyDialog({ open, onOpenChange, onSave }: ApiKeyDialogProps) 
               placeholder="Enter your API key"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
+              className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
             />
             <p className="text-xs text-muted-foreground">
               Your API key is stored locally and never shared

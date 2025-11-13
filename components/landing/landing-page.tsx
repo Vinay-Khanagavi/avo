@@ -11,7 +11,8 @@ export function LandingPage() {
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Gradient Background - Pastel colors from Unicorn Studio */}
-      <div className="fixed inset-0 z-0 bg-gradient-to-br from-[#FFE5D9] via-[#FFD4B3] via-[#E6E6FA] to-[#B0C4DE] dark:from-[#2a1f2e] dark:via-[#1a1a2e] dark:to-[#16213e]" />
+      <div className="fixed inset-0 z-0 bg-[linear-gradient(135deg,#FFE5D9_0%,#FFD4B3_35%,#E6E6FA_68%,#B0C4DE_100%)] dark:bg-[linear-gradient(135deg,#2a1f2e_0%,#1a1a2e_55%,#16213e_100%)]" />
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-10 h-[55vh] bg-linear-to-t from-[#d9d1ff]/90 via-[#eee9ff]/70 to-transparent blur-3xl dark:from-[#141731]/95 dark:via-[#1d2141]/75 dark:to-transparent" />
       
       {/* Mouse Tracker Circle */}
       <MouseTracker />
@@ -38,16 +39,16 @@ export function LandingPage() {
           <p className="text-muted-foreground mb-8 font-sans font-medium">
             Join thousands of users transforming their voice into text.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center relative z-[100]">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center relative z-100">
             <a
               href="/signup"
-              className="inline-flex items-center justify-center h-10 px-10 rounded-full bg-black text-white hover:bg-black hover:scale-110 transition-all duration-300 ease-out font-sans font-semibold relative z-[100]"
+              className="inline-flex items-center justify-center h-10 px-10 rounded-full bg-black text-white hover:bg-black hover:scale-110 transition-all duration-300 ease-out font-sans font-semibold relative z-100"
             >
               Create Account
             </a>
             <a
               href="/login"
-              className="inline-flex items-center justify-center h-10 px-10 rounded-full border border-gray-300 bg-white text-black hover:bg-white hover:scale-110 transition-all duration-300 ease-out font-sans font-medium relative z-[100]"
+              className="inline-flex items-center justify-center h-10 px-10 rounded-full border border-gray-300 bg-white text-black hover:bg-white hover:scale-110 transition-all duration-300 ease-out font-sans font-medium relative z-100"
             >
               Sign In
             </a>
