@@ -16,7 +16,7 @@ interface TabContent {
   isEmail?: boolean
 }
 
-interface DemoSectionProps {
+interface MainSectionProps {
   transcript?: string
   setTranscript?: (text: string) => void
   isRecording?: boolean
@@ -73,7 +73,7 @@ const tabContents: Record<TabType, TabContent> = {
   },
 }
 
-export function DemoSection({
+export function MainSection({
   transcript = "",
   setTranscript,
   isRecording = false,
@@ -81,9 +81,10 @@ export function DemoSection({
   onStart,
   onStop,
   onChunk,
-}: DemoSectionProps) {
+}: MainSectionProps) {
   const [activeTab, setActiveTab] = useState<TabType>("prompt")
   const contentRef = useRef<HTMLDivElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
   const isInteractive = !!onStart && !!onStop && !!onChunk
 
   const tabs = [
@@ -112,8 +113,61 @@ export function DemoSection({
     }
   }, [activeTab, isInteractive, setTranscript])
 
+  // Spacebar keyboard handler - use ref to persist across renders
+  const isSpacebarPressedRef = useRef(false)
+
+  useEffect(() => {
+    if (!isInteractive) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle spacebar if not typing in an input field
+      const target = e.target as HTMLElement
+      const isInputField = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
+
+      if (e.code === "Space" && !isInputField && !isSpacebarPressedRef.current && !isRecording && !isProcessing) {
+        e.preventDefault()
+        isSpacebarPressedRef.current = true
+        if (onStart) {
+          onStart()
+        }
+      }
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      // Only handle spacebar if not typing in an input field
+      const target = e.target as HTMLElement
+      const isInputField = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
+
+      if (e.code === "Space" && !isInputField && isSpacebarPressedRef.current) {
+        e.preventDefault()
+        isSpacebarPressedRef.current = false
+        if (isRecording && onStop) {
+          onStop()
+        }
+      }
+    }
+
+    // Handle window blur to stop recording if spacebar is released outside window
+    const handleBlur = () => {
+      if (isSpacebarPressedRef.current && isRecording && onStop) {
+        isSpacebarPressedRef.current = false
+        onStop()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("keyup", handleKeyUp)
+    window.addEventListener("blur", handleBlur)
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("keyup", handleKeyUp)
+      window.removeEventListener("blur", handleBlur)
+    }
+  }, [isInteractive, isRecording, isProcessing, onStart, onStop])
+
   return (
-    <section className="w-full py-20 px-4">
+    <section ref={sectionRef} className="w-full pt-20 px-4 relative pb-10 overflow-hidden">
       <div className="max-w-4xl mx-auto">
         {/* Tab Buttons */}
         <div className="flex flex-wrap gap-3 justify-center mb-12">

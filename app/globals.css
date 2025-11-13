@@ -341,3 +341,113 @@
   animation: none;
   background-color: #DFAAFF;
 }
+
+/* Waveform Pill Animations - Always-on idle motion */
+.wd_pill-bar {
+  transform-origin: center;
+  animation-name: pill-wobble;
+  animation-duration: 380ms;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/* Slight variety so they're not in sync */
+.wd_pill-bar:nth-child(odd) {
+  animation-duration: 240ms;
+  animation-delay: 40ms;
+}
+
+.wd_pill-bar:nth-child(3n) {
+  animation-duration: 180ms;
+  animation-delay: 120ms;
+}
+
+.wd_pill-bar:nth-child(5n) {
+  animation-duration: 220ms;
+  animation-delay: 180ms;
+}
+
+@keyframes pill-wobble {
+  0% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* When user is speaking */
+.wd_pill.is-speaking .wd_pill-bar {
+  transform-origin: center;
+  animation-name: pill-wobble2;
+  animation-duration: 480ms;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+/* Slight variety so they're not in sync */
+.wd_pill.is-speaking .wd_pill-bar:nth-child(odd) {
+  animation-duration: 290ms;
+  animation-delay: 40ms;
+}
+
+.wd_pill.is-speaking .wd_pill-bar:nth-child(3n) {
+  animation-duration: 250ms;
+  animation-delay: 120ms;
+}
+
+.wd_pill.is-speaking .wd_pill-bar:nth-child(5n) {
+  animation-duration: 320ms;
+  animation-delay: 180ms;
+}
+
+@keyframes pill-wobble2 {
+  0% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1.25);
+  }
+}
+
+/* Waveform Pill Dots */
+.wd_pill-dot {
+  opacity: 0.4;
+}
+
+@keyframes dotCycle {
+  0% {
+    opacity: 1;
+  }
+  33% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+
+/* Each dot runs the same stepped animation, shifted */
+.wd_pill-dot:nth-child(1) {
+  animation: dotCycle 0.5s infinite steps(1, end);
+}
+
+.wd_pill-dot:nth-child(2) {
+  animation: dotCycle 0.5s infinite steps(1, end) 0.2s;
+}
+
+.wd_pill-dot:nth-child(3) {
+  animation: dotCycle 0.5s infinite steps(1, end) 0.4s;
+}
+
+/* Bottom Gradient Styles */
+.wave-svg {
+  filter: blur(5px);
+  /* Subtle blur for a softer look */
+}
+
+.wave-path {
+  fill: rgba(142, 124, 229, 0.10);
+}

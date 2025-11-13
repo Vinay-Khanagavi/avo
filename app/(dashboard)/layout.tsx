@@ -2,6 +2,8 @@ import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { Sidebar } from "@/components/layout/sidebar"
+import { RecordingProvider } from "@/contexts/recording-context"
+import { LayoutContent } from "@/components/layout/layout-content"
 
 export default async function DashboardLayout({
   children,
@@ -15,12 +17,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
-    </div>
+    <RecordingProvider>
+      <div className="flex h-screen">
+        <Sidebar />
+        <LayoutContent>
+          {children}
+        </LayoutContent>
+      </div>
+    </RecordingProvider>
   )
 }
 

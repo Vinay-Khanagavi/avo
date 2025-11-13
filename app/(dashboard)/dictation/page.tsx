@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { DemoSection } from "@/components/landing/demo-section"
+import { MainSection } from "@/components/dictation/main-section"
 import { MicrophoneButton } from "@/components/dictation/microphone-button"
 import { TranscriptionDisplay } from "@/components/dictation/transcription-display"
+import { useRecording } from "@/contexts/recording-context"
 import {
   createTranscriptionSession,
   sendChunkWithRetry,
@@ -12,8 +13,8 @@ import {
 
 export default function DictationPage() {
   const [transcript, setTranscript] = useState("")
-  const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const { isRecording, setIsRecording } = useRecording()
   const sessionIdRef = useRef<string | null>(null)
   const pendingChunksRef = useRef<Blob[]>([])
 
@@ -89,8 +90,8 @@ export default function DictationPage() {
   )
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <DemoSection 
+    <div className="container mx-auto px-4 py-8 max-w-4xl overflow-hidden">
+      <MainSection 
         transcript={transcript}
         setTranscript={setTranscript}
         isRecording={isRecording}
