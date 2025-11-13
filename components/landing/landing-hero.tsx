@@ -37,11 +37,7 @@ export function LandingHero() {
 
         {/* Audio Waveform Animation */}
         <div className="relative w-full max-w-3xl mx-auto h-32 md:h-40 my-12">
-          <AudioWaveform
-            className="w-full h-full"
-            barCount={50}
-            color="oklch(0.4891 0 0)"
-          />
+          <AudioWaveform className="w-full h-full" />
         </div>
 
         {/* CTA Buttons */}

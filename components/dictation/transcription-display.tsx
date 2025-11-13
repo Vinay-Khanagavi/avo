@@ -34,9 +34,11 @@ export function TranscriptionDisplay({
         <div className="relative group">
           <div className="min-h-[200px] max-h-[400px] overflow-y-auto">
             {transcript ? (
-              <p className="text-lg leading-relaxed whitespace-pre-wrap">
+              <p className={`text-lg leading-relaxed whitespace-pre-wrap ${
+                transcript.startsWith("[Error:") ? "text-destructive" : ""
+              }`}>
                 {transcript}
-                {isProcessing && (
+                {isProcessing && !transcript.startsWith("[Error:") && (
                   <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-1" />
                 )}
               </p>

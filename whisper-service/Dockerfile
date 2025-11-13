@@ -7,7 +7,10 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install CPU-only PyTorch first (much smaller than CUDA version)
+RUN pip install --no-cache-dir --user torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Install Python dependencies (whisper will use the CPU-only PyTorch)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 

@@ -23,51 +23,22 @@ export interface TranscriptionResult {
   isPartial: boolean
 }
 
+/**
+ * @deprecated This function is deprecated. Use Whisper streaming transcription instead.
+ * See lib/whisper-stream.ts for the new implementation.
+ */
 export async function* streamTranscription(
   audioStream: AsyncIterable<Uint8Array>,
   languageCode: LanguageCode = LanguageCode.EN_US,
   vocabularyNames?: string[]
 ): AsyncGenerator<TranscriptionResult> {
+  // DEPRECATED: This AWS Transcribe code is no longer used
+  // Using Whisper streaming instead - see lib/whisper-stream.ts
+  throw new Error("AWS Transcribe streaming is deprecated. Use Whisper streaming instead.")
+  
+  /* Commented out deprecated AWS Transcribe implementation
   const client = getTranscribeClient()
-
-  const command = new StartStreamTranscriptionCommand({
-    LanguageCode: languageCode,
-    MediaSampleRateHertz: 16000,
-    MediaEncoding: "pcm",
-    VocabularyNames: vocabularyNames,
-  })
-
-  try {
-    const response = await client.send(command)
-    
-    if (!response.TranscriptResultStream) {
-      throw new Error("No transcript stream received")
-    }
-
-    // Send audio chunks
-    const audioIterator = audioStream[Symbol.asyncIterator]()
-    
-    // Process transcription results
-    for await (const event of response.TranscriptResultStream) {
-      if (event.TranscriptEvent) {
-        const results = event.TranscriptEvent.Transcript?.Results || []
-        
-        for (const result of results) {
-          if (result.Alternatives && result.Alternatives.length > 0) {
-            const transcript = result.Alternatives[0].Transcript || ""
-            const isPartial = result.IsPartial || false
-            
-            yield {
-              transcript,
-              isPartial,
-            }
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Transcription error:", error)
-    throw error
-  }
+  // ... rest of implementation
+  */
 }
 

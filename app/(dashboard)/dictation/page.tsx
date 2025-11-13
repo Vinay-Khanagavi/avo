@@ -26,9 +26,10 @@ export default function DictationPage() {
       // Create transcription session
       const session = await createTranscriptionSession()
       sessionIdRef.current = session.sessionId
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating session:", error)
-      setTranscript("[Error: Failed to start transcription session. Please try again.]")
+      const errorMessage = error?.message || "Failed to start transcription session"
+      setTranscript(`[Error: ${errorMessage}]`)
       setIsRecording(false)
     }
   }
