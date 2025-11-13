@@ -34,7 +34,8 @@ export function Sidebar() {
                 variant={isActive ? "secondary" : "ghost"}
                 className={cn(
                   "w-full justify-start",
-                  isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                  isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
+                  !isActive && "hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
                 )}
               >
                 <Icon className="mr-2 h-4 w-4" />
@@ -48,8 +49,8 @@ export function Sidebar() {
       <div className="p-4 border-t">
         <Button
           variant="ghost"
-          className="w-full justify-start"
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="w-full justify-start hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+          onClick={() => signOut({ callbackUrl: "/" })}
         >
           <LogOut className="mr-2 h-4 w-4" />
           Sign Out
