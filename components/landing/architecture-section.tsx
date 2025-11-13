@@ -72,10 +72,10 @@ export function ArchitectureSection() {
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <h2 className="text-4xl md:text-5xl font-medium mb-4 bg-gradient-to-r from-white via-white/90 to-white bg-clip-text text-transparent">
+          <h2 className="text-4xl md:text-5xl font-medium mb-4 bg-gradient-to-r from-white via-white/90 to-white bg-clip-text text-transparent font-serif">
             Scalable Architecture
           </h2>
-          <p className="text-lg text-white/70 max-w-2xl mx-auto">
+          <p className="text-lg text-white/70 max-w-2xl mx-auto font-sans font-medium">
             Built for performance and reliability using AWS EC2, Railway, and modern cloud infrastructure
           </p>
         </div>
@@ -111,10 +111,10 @@ export function ArchitectureSection() {
                   <div className="p-3 bg-white/10 rounded-lg w-fit">
                     <Icon className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white">
+                  <h3 className="text-lg font-semibold text-white font-sans">
                     {feature.title}
                   </h3>
-                  <p className="text-sm text-white/70 leading-relaxed">
+                  <p className="text-sm text-white/70 leading-relaxed font-sans font-medium">
                     {feature.description}
                   </p>
                 </div>
@@ -129,22 +129,22 @@ export function ArchitectureSection() {
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <h3 className="text-2xl font-semibold text-white mb-6">
+          <h3 className="text-2xl font-semibold text-white mb-6 font-serif">
             Architecture Highlights
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <h4 className="text-white font-medium mb-2">AWS EC2 Deployment</h4>
-                <p className="text-white/70 text-sm">
+                <h4 className="text-white font-medium mb-2 font-sans font-semibold">AWS EC2 Deployment</h4>
+                <p className="text-white/70 text-sm font-sans font-medium">
                   Whisper service runs on dedicated EC2 instances with Docker containers. 
                   Models are pre-loaded in memory, eliminating cold starts and ensuring 
                   sub-10 second transcription times.
                 </p>
               </div>
               <div>
-                <h4 className="text-white font-medium mb-2">Railway Hosting</h4>
-                <p className="text-white/70 text-sm">
+                <h4 className="text-white font-medium mb-2 font-sans font-semibold">Railway Hosting</h4>
+                <p className="text-white/70 text-sm font-sans font-medium">
                   Next.js application and PostgreSQL database are hosted on Railway, 
                   providing seamless deployment, automatic SSL, and integrated database management.
                 </p>
@@ -152,15 +152,15 @@ export function ArchitectureSection() {
             </div>
             <div className="space-y-4">
               <div>
-                <h4 className="text-white font-medium mb-2">Real-time Streaming</h4>
-                <p className="text-white/70 text-sm">
+                <h4 className="text-white font-medium mb-2 font-sans font-semibold">Real-time Streaming</h4>
+                <p className="text-white/70 text-sm font-sans font-medium">
                   WebSocket connections enable real-time audio streaming from the browser 
                   to the Whisper service, with chunked processing for low-latency transcription.
                 </p>
               </div>
               <div>
-                <h4 className="text-white font-medium mb-2">Security & Scalability</h4>
-                <p className="text-white/70 text-sm">
+                <h4 className="text-white font-medium mb-2 font-sans font-semibold">Security & Scalability</h4>
+                <p className="text-white/70 text-sm font-sans font-medium">
                   AWS Security Groups control access, while the architecture supports 
                   horizontal scaling. EC2 instances can be upgraded or replicated 
                   based on demand.

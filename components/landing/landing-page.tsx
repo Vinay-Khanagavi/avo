@@ -25,22 +25,22 @@ export function LandingPage() {
         
         {/* Footer CTA */}
         <div className="w-full max-w-4xl mx-auto px-4 py-20 text-center">
-          <h2 className="text-3xl md:text-4xl font-medium mb-4">
+          <h2 className="text-3xl md:text-4xl font-medium mb-4 font-serif">
             Ready to get started?
           </h2>
-          <p className="text-muted-foreground mb-8">
+          <p className="text-muted-foreground mb-8 font-sans font-medium">
             Join thousands of users transforming their voice into text.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
               href="/signup"
-              className="inline-flex items-center justify-center h-10 px-8 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center justify-center h-10 px-8 rounded-md bg-[#F0D7FF] text-foreground hover:bg-[#DFAAFF] transition-colors font-sans font-semibold animate-[purple-glow_2s_ease-in-out_infinite]"
             >
               Create Account
             </a>
             <a
               href="/login"
-              className="inline-flex items-center justify-center h-10 px-8 rounded-md border bg-background hover:bg-accent transition-colors"
+              className="inline-flex items-center justify-center h-10 px-8 rounded-md border bg-background hover:bg-accent transition-colors font-sans font-medium"
             >
               Sign In
             </a>
