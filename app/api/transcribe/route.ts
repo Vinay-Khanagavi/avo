@@ -58,20 +58,39 @@ export async function POST(request: NextRequest) {
 
     // Save transcription to database
     if (mockTranscript.trim()) {
-      await prisma.transcription.create({
-        data: {
-          text: mockTranscript.trim(),
-          userId: session.user.id,
-        },
-      })
+      try {
+        await prisma.transcription.create({
+          data: {
+            text: mockTranscript.trim(),
+            userId: session.user.id,
+          },
+        })
+      } catch (dbError: any) {
+        // Log database error but don't fail the request
+        console.error("Failed to save transcription to database:", dbError)
+        // Continue and return the transcript even if DB save fails
+      }
     }
 
     return NextResponse.json({
       transcript: mockTranscript.trim(),
       success: true,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Transcribe API error:", error)
+    
+    // Handle Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string }
+      if (prismaError.code === 'P1001' || prismaError.code === 'P1000') {
+        console.error("Database connection error:", prismaError.message)
+        return NextResponse.json(
+          { error: "Database connection failed. Please try again later." },
+          { status: 503 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

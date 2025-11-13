@@ -74,41 +74,49 @@ railway up
 
 ## Step 3: Configure Environment Variables
 
-Go to your Railway service → **Variables** tab and add:
+Go to your Railway service → **Variables** tab and add the following:
 
-### Required Database Variables
+### Quick Setup Instructions
 
-```env
-DATABASE_URL=postgresql://postgres:password@host:5432/railway
-```
-*(Use the DATABASE_URL from Step 1)*
+1. **Get DATABASE_URL from Railway PostgreSQL**
+   - Go to Railway Dashboard → PostgreSQL Service → Variables tab
+   - Copy the `DATABASE_URL` value
 
-### Required NextAuth Variables
+2. **Get your Railway App URL**
+   - Go to Railway Dashboard → Your Next.js Service → Settings → Domains
+   - Copy your Railway domain (e.g., `https://your-app-name.railway.app`)
 
-```env
-NEXTAUTH_SECRET=your-secret-key-here
-NEXTAUTH_URL=https://your-app-name.railway.app
-```
+3. **Add Variables to Railway**
+   - Go to Railway Dashboard → Your Next.js Service → Variables tab
+   - Click "New Variable" for each variable below
 
-**Generate NEXTAUTH_SECRET:**
-```bash
-openssl rand -base64 32
-```
+### Required Environment Variables
 
-### Required Whisper Service Variables
+#### 1. DATABASE_URL
+- **Source**: Railway PostgreSQL service → Variables tab
+- **Format**: `postgresql://postgres:password@host:5432/railway`
+- **Action**: Copy the entire connection string from Railway PostgreSQL service
 
-```env
-WHISPER_SERVICE_URL=http://18.204.48.204:8000
-WHISPER_API_KEY=16e90a8598c12bcf2606a34a4e04fda5b0c7c4f3b2cadcbc5d8ddb61ca9b5189
-```
+#### 2. NEXTAUTH_SECRET
+- **Generate**: Run `openssl rand -base64 32` in your terminal
+- **Action**: Copy the generated value
+- **Example**: `F9kv4UQvY9QjkN+mp9RsDDYsfjFF/n6H582SHO671uY=`
 
-### Optional AWS Variables (if using AWS Transcribe as fallback)
+#### 3. NEXTAUTH_URL
+- **Format**: `https://your-service-name.railway.app`
+- **Action**: 
+  1. Deploy your service first
+  2. Go to Settings → Domains
+  3. Copy your Railway domain
+  4. Update this variable
 
-```env
-AWS_ACCESS_KEY_ID=your-aws-access-key
-AWS_SECRET_ACCESS_KEY=your-aws-secret-key
-AWS_REGION=us-east-1
-```
+#### 4. WHISPER_SERVICE_URL
+- **Value**: `http://18.204.48.204:8000` (or your Whisper service URL)
+- **Action**: Set to your Whisper service endpoint
+
+#### 5. WHISPER_API_KEY
+- **Value**: Your Whisper service API key
+- **Action**: Set to match your Whisper service configuration
 
 ### Complete Environment Variables List
 
@@ -120,15 +128,33 @@ DATABASE_URL=postgresql://postgres:password@host:5432/railway
 NEXTAUTH_SECRET=your-generated-secret-here
 NEXTAUTH_URL=https://your-app-name.railway.app
 
-# Whisper Service (AWS EC2)
+# Whisper Service
 WHISPER_SERVICE_URL=http://18.204.48.204:8000
-WHISPER_API_KEY=16e90a8598c12bcf2606a34a4e04fda5b0c7c4f3b2cadcbc5d8ddb61ca9b5189
+WHISPER_API_KEY=your-whisper-api-key-here
 
-# Optional: AWS (if needed)
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
+# Optional: AWS (if using AWS Transcribe as fallback)
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 AWS_REGION=us-east-1
 ```
+
+### Environment Variable Verification
+
+After adding all variables:
+
+1. **Redeploy your service** (Railway will automatically redeploy when variables change)
+2. **Check logs** for any environment variable errors
+3. **Test the application**:
+   - Visit your Railway URL
+   - Try signing up
+   - Test dictation feature
+
+### Troubleshooting Environment Variables
+
+- **Variable Not Found Error**: Ensure variable name matches exactly (case-sensitive), check for extra spaces or quotes, redeploy after adding variables
+- **Database Connection Error**: Verify `DATABASE_URL` is correct, ensure PostgreSQL service is running, check that migrations have run
+- **NextAuth Error**: Verify `NEXTAUTH_SECRET` is set correctly, ensure `NEXTAUTH_URL` matches your Railway domain exactly, check for HTTPS (Railway uses HTTPS by default)
+- **Whisper Service Error**: Verify Whisper service is running, check `WHISPER_SERVICE_URL` and `WHISPER_API_KEY` are correct, ensure security groups allow Railway traffic
 
 ## Step 4: Run Database Migrations
 

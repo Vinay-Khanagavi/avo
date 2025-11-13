@@ -26,8 +26,21 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json({ words })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Dictionary GET error:", error)
+    
+    // Handle Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string }
+      if (prismaError.code === 'P1001' || prismaError.code === 'P1000') {
+        console.error("Database connection error:", prismaError.message)
+        return NextResponse.json(
+          { error: "Database connection failed. Please try again later." },
+          { status: 503 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -78,7 +91,7 @@ export async function POST(request: NextRequest) {
       { word: dictionaryEntry },
       { status: 201 }
     )
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues[0]?.message || "Validation error" },
@@ -87,6 +100,25 @@ export async function POST(request: NextRequest) {
     }
 
     console.error("Dictionary POST error:", error)
+    
+    // Handle Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string }
+      if (prismaError.code === 'P2002') {
+        return NextResponse.json(
+          { error: "Word already exists in dictionary" },
+          { status: 400 }
+        )
+      }
+      if (prismaError.code === 'P1001' || prismaError.code === 'P1000') {
+        console.error("Database connection error:", prismaError.message)
+        return NextResponse.json(
+          { error: "Database connection failed. Please try again later." },
+          { status: 503 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -138,7 +170,7 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json({ word: updated })
-  } catch (error) {
+  } catch (error: any) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.issues[0]?.message || "Validation error" },
@@ -147,6 +179,25 @@ export async function PUT(request: NextRequest) {
     }
 
     console.error("Dictionary PUT error:", error)
+    
+    // Handle Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string }
+      if (prismaError.code === 'P2025') {
+        return NextResponse.json(
+          { error: "Dictionary entry not found" },
+          { status: 404 }
+        )
+      }
+      if (prismaError.code === 'P1001' || prismaError.code === 'P1000') {
+        console.error("Database connection error:", prismaError.message)
+        return NextResponse.json(
+          { error: "Database connection failed. Please try again later." },
+          { status: 503 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
@@ -195,8 +246,27 @@ export async function DELETE(request: NextRequest) {
     })
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Dictionary DELETE error:", error)
+    
+    // Handle Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string }
+      if (prismaError.code === 'P2025') {
+        return NextResponse.json(
+          { error: "Dictionary entry not found" },
+          { status: 404 }
+        )
+      }
+      if (prismaError.code === 'P1001' || prismaError.code === 'P1000') {
+        console.error("Database connection error:", prismaError.message)
+        return NextResponse.json(
+          { error: "Database connection failed. Please try again later." },
+          { status: 503 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

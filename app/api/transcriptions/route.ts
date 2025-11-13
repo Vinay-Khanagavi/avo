@@ -49,8 +49,21 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Transcriptions GET error:", error)
+    
+    // Handle Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string }
+      if (prismaError.code === 'P1001' || prismaError.code === 'P1000') {
+        console.error("Database connection error:", prismaError.message)
+        return NextResponse.json(
+          { error: "Database connection failed. Please try again later." },
+          { status: 503 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

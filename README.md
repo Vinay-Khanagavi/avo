@@ -140,16 +140,15 @@ Currently, the API includes a mock implementation for development.
 
 ## Deployment on Railway
 
+See the [Deployment Documentation](./docs/deployment/RAILWAY_DEPLOYMENT.md) for complete deployment instructions.
+
+Quick steps:
 1. **Create Railway project** and connect your GitHub repository
 2. **Add PostgreSQL** service in Railway
-3. **Set environment variables** in Railway:
-   - `DATABASE_URL` (auto-populated from PostgreSQL service)
-   - `NEXTAUTH_SECRET` (generate with `openssl rand -base64 32`)
-   - `NEXTAUTH_URL` (your Railway app URL)
-   - `AWS_ACCESS_KEY_ID`
-   - `AWS_SECRET_ACCESS_KEY`
-   - `AWS_REGION`
+3. **Set environment variables** (see [Deployment Guide](./docs/deployment/RAILWAY_DEPLOYMENT.md#step-3-configure-environment-variables))
 4. **Deploy**: Railway will automatically build and deploy
+
+For troubleshooting, see [Troubleshooting Guide](./docs/troubleshooting/500_ERROR_FIX.md).
 
 ## Development Notes
 

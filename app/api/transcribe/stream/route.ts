@@ -141,13 +141,19 @@ export async function POST(request: NextRequest) {
 
         // Save final transcript to database
         if (data.transcript?.trim()) {
-          const { prisma } = await import("@/lib/prisma")
-          await prisma.transcription.create({
-            data: {
-              text: data.transcript.trim(),
-              userId: session.user.id,
-            },
-          })
+          try {
+            const { prisma } = await import("@/lib/prisma")
+            await prisma.transcription.create({
+              data: {
+                text: data.transcript.trim(),
+                userId: session.user.id,
+              },
+            })
+          } catch (dbError: any) {
+            // Log database error but don't fail the request
+            console.error("Failed to save transcription to database:", dbError)
+            // Continue and return the transcript even if DB save fails
+          }
         }
 
         return NextResponse.json(data)
@@ -165,8 +171,31 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Stream transcription API error:", error)
+    
+    // Handle Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string }
+      if (prismaError.code === 'P1001' || prismaError.code === 'P1000') {
+        console.error("Database connection error:", prismaError.message)
+        return NextResponse.json(
+          { error: "Database connection failed. Please try again later." },
+          { status: 503 }
+        )
+      }
+    }
+    
+    // Handle network errors
+    if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
+      return NextResponse.json(
+        { 
+          error: "Whisper service is not available. Please try again later." 
+        },
+        { status: 503 }
+      )
+    }
+    
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
