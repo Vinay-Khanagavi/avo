@@ -91,7 +91,6 @@ export function LandingHero() {
         {/* Main Heading - Using EB Garamond serif font */}
         <h1 className="text-5xl md:text-6xl font-medium tracking-tight text-foreground font-serif">
           <AnimatedHeadline words={["Transform", "Your", "Voice"]} />
-          <br />
           <span className="text-primary italic">
             <AnimatedHeadline words={["Into", "Text"]} />
           </span>

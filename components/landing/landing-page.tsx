@@ -1,5 +1,6 @@
 "use client"
 
+import { Github } from "lucide-react"
 import { LandingHero, FeatureHighlights } from "./landing-hero"
 import { MouseTracker } from "./mouse-tracker"
 import { GrainOverlay } from "./grain-overlay"
@@ -40,7 +41,7 @@ export function LandingPage() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center relative z-[100]">
             <a
               href="/signup"
-              className="inline-flex items-center justify-center h-10 px-10 rounded-full bg-[#F0D7FF] text-black hover:bg-[#F0D7FF] hover:scale-110 transition-all duration-300 ease-out font-sans font-semibold relative z-[100]"
+              className="inline-flex items-center justify-center h-10 px-10 rounded-full bg-black text-white hover:bg-black hover:scale-110 transition-all duration-300 ease-out font-sans font-semibold relative z-[100]"
             >
               Create Account
             </a>
@@ -56,17 +57,18 @@ export function LandingPage() {
         {/* Footer */}
         <footer className="w-full py-8 text-center relative z-40">
           <div className="max-w-4xl mx-auto px-4">
-            <p className="text-sm text-muted-foreground font-sans">
-              Built in 2025... Supported by{" "}
+            <div className="flex items-center justify-center gap-3 text-muted-foreground">
+              <span className="text-sm font-sans">Built in 2025</span>
               <a
-                href="https://blink.new"
+                href="https://github.com/Vinay-Khanagavi/avo"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline font-medium"
+                aria-label="AVO GitHub repository"
+                className="hover:text-foreground transition-colors"
               >
-                blink.new
+                <Github className="w-5 h-5" />
               </a>
-            </p>
+            </div>
           </div>
         </footer>
       </div>

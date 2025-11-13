@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 export function LandingHeader() {
   const [isVisible, setIsVisible] = useState(false)
   const [isArchitectureVisible, setIsArchitectureVisible] = useState(false)
+  const [hasScrolled, setHasScrolled] = useState(false)
 
   useEffect(() => {
     setIsVisible(true)
@@ -30,6 +31,21 @@ export function LandingHeader() {
     }
   }, [])
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setHasScrolled(window.scrollY > 20)
+    }
+
+    handleScroll()
+    window.addEventListener("scroll", handleScroll, { passive: true })
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+    }
+  }, [])
+
+  const highlightHeader = isArchitectureVisible || hasScrolled
+
   const scrollToArchitecture = () => {
     const architectureSection = document.getElementById("architecture")
     if (architectureSection) {
@@ -43,24 +59,26 @@ export function LandingHeader() {
         isVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-full"
       }`}
     >
-      <div className={`absolute inset-0 backdrop-blur-md border-b shadow-lg shadow-black/5 transition-all duration-300 ${
-        isArchitectureVisible 
-          ? "bg-black/20 border-white/10" 
-          : "bg-white/10 border-white/20"
-      }`}></div>
+      <div
+        className={`absolute inset-0 transition-all duration-300 ${
+          highlightHeader
+            ? "backdrop-blur-md bg-black/20 border-white/10 shadow-lg shadow-black/5"
+            : "bg-transparent"
+        }`}
+      ></div>
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
-              isArchitectureVisible ? "bg-white" : "bg-black"
+              highlightHeader ? "bg-white" : "bg-black"
             }`}>
               <div className={`w-4 h-4 rounded-sm transition-colors duration-300 ${
-                isArchitectureVisible ? "bg-black" : "bg-white"
+                highlightHeader ? "bg-black" : "bg-white"
               }`}></div>
             </div>
             <span className={`text-xl font-semibold font-sans transition-colors duration-300 ${
-              isArchitectureVisible ? "text-white" : "text-black"
+              highlightHeader ? "text-white" : "text-black"
             }`}>AVO</span>
           </Link>
 
@@ -69,7 +87,7 @@ export function LandingHeader() {
             <Button
               onClick={scrollToArchitecture}
               className={`text-base font-medium rounded-full px-6 py-2 font-sans hover:scale-110 transition-all duration-300 ease-out ${
-                isArchitectureVisible
+                highlightHeader
                   ? "text-white bg-white/20 hover:bg-white/30"
                   : "text-black bg-gray-100 hover:bg-gray-200"
               }`}
@@ -81,7 +99,7 @@ export function LandingHeader() {
             <Link
               href="/login"
               className={`text-base font-medium bg-transparent rounded-full px-6 py-2 transition-all duration-200 ease-out font-sans ${
-                isArchitectureVisible 
+                highlightHeader 
                   ? "text-white hover:bg-white/20" 
                   : "text-black hover:bg-gray-100"
               }`}
