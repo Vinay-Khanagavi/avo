@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -12,16 +12,66 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ServiceSelector, TranscriptionService } from "@/components/dictation/service-selector"
 
 export default function SettingsPage() {
   const [language, setLanguage] = useState("en-US")
   const [chunkSize, setChunkSize] = useState("5")
+  const [transcriptionService, setTranscriptionService] = useState<TranscriptionService>("whisper")
+
+  // Load settings from localStorage on mount
+  useEffect(() => {
+    const savedLanguage = localStorage.getItem("transcriptionLanguage")
+    const savedChunkSize = localStorage.getItem("audioChunkSize")
+    const savedService = localStorage.getItem("transcriptionService") as TranscriptionService
+
+    if (savedLanguage) setLanguage(savedLanguage)
+    if (savedChunkSize) setChunkSize(savedChunkSize)
+    if (savedService) setTranscriptionService(savedService)
+  }, [])
+
+  // Listen for storage changes (when updated in dictation page)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "transcriptionService" && e.newValue) {
+        setTranscriptionService(e.newValue as TranscriptionService)
+      }
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+    return () => window.removeEventListener("storage", handleStorageChange)
+  }, [])
+
+  // Listen for custom event (same-tab sync)
+  useEffect(() => {
+    const handleCustomChange = () => {
+      const savedService = localStorage.getItem("transcriptionService") as TranscriptionService
+      if (savedService && savedService !== transcriptionService) {
+        setTranscriptionService(savedService)
+      }
+    }
+
+    window.addEventListener("transcriptionServiceChanged", handleCustomChange)
+    return () => window.removeEventListener("transcriptionServiceChanged", handleCustomChange)
+  }, [transcriptionService])
 
   const handleSave = async () => {
     // Save settings to localStorage or API
     localStorage.setItem("transcriptionLanguage", language)
     localStorage.setItem("audioChunkSize", chunkSize)
+    localStorage.setItem("transcriptionService", transcriptionService)
+    
+    // Trigger custom event for same-tab sync
+    window.dispatchEvent(new Event("transcriptionServiceChanged"))
+    
     alert("Settings saved!")
+  }
+
+  const handleServiceChange = (service: TranscriptionService) => {
+    setTranscriptionService(service)
+    localStorage.setItem("transcriptionService", service)
+    // Trigger custom event for same-tab sync
+    window.dispatchEvent(new Event("transcriptionServiceChanged"))
   }
 
   return (
@@ -76,6 +126,18 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">
                 Smaller chunks provide faster transcription but may reduce accuracy.
                 Recommended: 5 seconds
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="transcriptionService">Transcription Service</Label>
+              <ServiceSelector
+                value={transcriptionService}
+                onChange={handleServiceChange}
+                disabled={false}
+              />
+              <p className="text-xs text-muted-foreground">
+                Choose your preferred transcription service. Each service has different accuracy and speed characteristics.
               </p>
             </div>
 

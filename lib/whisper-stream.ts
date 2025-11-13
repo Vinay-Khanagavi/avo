@@ -31,14 +31,15 @@ const WHISPER_API_KEY = process.env.NEXT_PUBLIC_WHISPER_API_KEY || ""
  * Uses Next.js API route as proxy
  */
 export async function createTranscriptionSession(
-  prompt?: string
+  prompt?: string,
+  service: "whisper" | "deepgram" | "assemblyai" = "whisper"
 ): Promise<TranscriptionSession> {
   const response = await fetch("/api/transcribe/stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ action: "create", prompt }),
+    body: JSON.stringify({ action: "create", prompt, service }),
   })
 
   if (!response.ok) {
@@ -60,12 +61,26 @@ export async function createTranscriptionSession(
  */
 export async function sendChunk(
   sessionId: string,
-  chunk: Blob
+  chunk: Blob,
+  service: "whisper" | "deepgram" | "assemblyai" = "whisper"
 ): Promise<ChunkResponse> {
   const formData = new FormData()
   formData.append("file", chunk, "chunk.webm")
   formData.append("action", "chunk")
   formData.append("sessionId", sessionId)
+  formData.append("service", service)
+
+  // Add custom API key if available
+  if (typeof window !== "undefined") {
+    try {
+      const customKeys = JSON.parse(localStorage.getItem("customApiKeys") || "{}")
+      if (customKeys[service]?.apiKey) {
+        formData.append("customApiKey", customKeys[service].apiKey)
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+  }
 
   const response = await fetch("/api/transcribe/stream", {
     method: "POST",
@@ -87,13 +102,14 @@ export async function sendChunk(
 export async function sendChunkWithRetry(
   sessionId: string,
   chunk: Blob,
+  service: "whisper" | "deepgram" | "assemblyai" = "whisper",
   maxRetries: number = 3
 ): Promise<ChunkResponse> {
   let lastError: Error | null = null
 
   for (let i = 0; i < maxRetries; i++) {
     try {
-      return await sendChunk(sessionId, chunk)
+      return await sendChunk(sessionId, chunk, service)
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
 
@@ -141,14 +157,15 @@ export async function getSession(sessionId: string): Promise<SessionResponse> {
  * Uses Next.js API route as proxy
  */
 export async function finalizeSession(
-  sessionId: string
+  sessionId: string,
+  service: "whisper" | "deepgram" | "assemblyai" = "whisper"
 ): Promise<ChunkResponse> {
   const response = await fetch("/api/transcribe/stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ action: "finalize", sessionId }),
+    body: JSON.stringify({ action: "finalize", sessionId, service }),
   })
 
   if (!response.ok) {

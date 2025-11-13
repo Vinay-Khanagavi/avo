@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { 
+  createDeepgramSession, 
+  transcribeDeepgramChunk, 
+  finalizeDeepgramSession 
+} from "@/lib/deepgram-service"
+import { 
+  createAssemblyAISession, 
+  transcribeAssemblyAIChunk, 
+  finalizeAssemblyAISession 
+} from "@/lib/assemblyai-service"
 
 const WHISPER_SERVICE_URL = process.env.WHISPER_SERVICE_URL || "http://localhost:8000"
 const WHISPER_API_KEY = process.env.WHISPER_API_KEY || ""
+
+// In-memory session storage for Deepgram and AssemblyAI
+// In production, consider using Redis or a database
+const sessionStorage = new Map<string, { transcript: string; service: string }>()
 
 /**
  * Create a new transcription session
@@ -23,6 +37,8 @@ export async function POST(request: NextRequest) {
       const formData = await request.formData()
       const action = formData.get("action") as string
       const sessionId = formData.get("sessionId") as string
+      const service = (formData.get("service") as string) || "whisper"
+      const customApiKey = formData.get("customApiKey") as string | null
 
       if (action === "chunk" && sessionId) {
         const chunkFile = formData.get("file") as File
@@ -31,29 +47,165 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "No file provided" }, { status: 400 })
         }
 
-        // Forward to Whisper service
-        const chunkFormData = new FormData()
-        chunkFormData.append("file", chunkFile, "chunk.webm")
+        // Convert File to Buffer
+        const arrayBuffer = await chunkFile.arrayBuffer()
+        const audioBuffer = Buffer.from(arrayBuffer)
 
-        const chunkHeaders: HeadersInit = {}
-        if (WHISPER_API_KEY) {
-          chunkHeaders["X-API-Key"] = WHISPER_API_KEY
-        }
+        // Route to appropriate service
+        if (service === "deepgram") {
+          try {
+            const sessionData = sessionStorage.get(sessionId)
+            const existingTranscript = sessionData?.transcript || ""
 
-        try {
-          const response = await fetch(
-            `${WHISPER_SERVICE_URL}/api/v1/sessions/${sessionId}/chunks`,
-            {
-              method: "POST",
-              headers: chunkHeaders,
-              body: chunkFormData,
+            const result = await transcribeDeepgramChunk(
+              sessionId,
+              audioBuffer,
+              existingTranscript,
+              customApiKey || undefined
+            )
+
+            // Update session storage
+            sessionStorage.set(sessionId, {
+              transcript: result.transcript,
+              service: "deepgram",
+            })
+
+            return NextResponse.json(result)
+          } catch (error: any) {
+            console.error("Deepgram transcription error:", error)
+            return NextResponse.json(
+              { error: error.message || "Deepgram transcription failed" },
+              { status: 500 }
+            )
+          }
+        } else if (service === "assemblyai") {
+          try {
+            const sessionData = sessionStorage.get(sessionId)
+            const existingTranscript = sessionData?.transcript || ""
+
+            const result = await transcribeAssemblyAIChunk(
+              sessionId,
+              audioBuffer,
+              existingTranscript,
+              customApiKey || undefined
+            )
+
+            // Update session storage
+            sessionStorage.set(sessionId, {
+              transcript: result.transcript,
+              service: "assemblyai",
+            })
+
+            return NextResponse.json(result)
+          } catch (error: any) {
+            console.error("AssemblyAI transcription error:", error)
+            return NextResponse.json(
+              { error: error.message || "AssemblyAI transcription failed" },
+              { status: 500 }
+            )
+          }
+        } else {
+          // Default to Whisper service
+          const chunkFormData = new FormData()
+          chunkFormData.append("file", chunkFile, "chunk.webm")
+
+          const chunkHeaders: HeadersInit = {}
+          if (WHISPER_API_KEY) {
+            chunkHeaders["X-API-Key"] = WHISPER_API_KEY
+          }
+
+          try {
+            const response = await fetch(
+              `${WHISPER_SERVICE_URL}/api/v1/sessions/${sessionId}/chunks`,
+              {
+                method: "POST",
+                headers: chunkHeaders,
+                body: chunkFormData,
+              }
+            )
+
+            if (!response.ok) {
+              const error = await response.json().catch(() => ({ detail: "Unknown error" }))
+              return NextResponse.json(
+                { error: error.detail || "Failed to process chunk" },
+                { status: response.status }
+              )
             }
+
+            const data = await response.json()
+            return NextResponse.json(data)
+          } catch (error: any) {
+            if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
+              return NextResponse.json(
+                { 
+                  error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
+                },
+                { status: 503 }
+              )
+            }
+            throw error
+          }
+        }
+      }
+    }
+
+    // Handle JSON (create/finalize)
+    const body = await request.json()
+    const { action, sessionId, service = "whisper" } = body
+
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+    }
+
+    if (WHISPER_API_KEY) {
+      headers["X-API-Key"] = WHISPER_API_KEY
+    }
+
+    // Create session
+    if (action === "create") {
+      if (service === "deepgram") {
+        try {
+          const session = await createDeepgramSession(body.prompt)
+          sessionStorage.set(session.sessionId, {
+            transcript: "",
+            service: "deepgram",
+          })
+          return NextResponse.json({ session_id: session.sessionId, status: "created" })
+        } catch (error: any) {
+          console.error("Deepgram session creation error:", error)
+          return NextResponse.json(
+            { error: error.message || "Failed to create Deepgram session" },
+            { status: 500 }
           )
+        }
+      } else if (service === "assemblyai") {
+        try {
+          const session = await createAssemblyAISession(body.prompt)
+          sessionStorage.set(session.sessionId, {
+            transcript: "",
+            service: "assemblyai",
+          })
+          return NextResponse.json({ session_id: session.sessionId, status: "created" })
+        } catch (error: any) {
+          console.error("AssemblyAI session creation error:", error)
+          return NextResponse.json(
+            { error: error.message || "Failed to create AssemblyAI session" },
+            { status: 500 }
+          )
+        }
+      } else {
+        // Default to Whisper service
+        try {
+          const response = await fetch(`${WHISPER_SERVICE_URL}/api/v1/sessions`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ prompt: body.prompt }),
+          })
 
           if (!response.ok) {
             const error = await response.json().catch(() => ({ detail: "Unknown error" }))
             return NextResponse.json(
-              { error: error.detail || "Failed to process chunk" },
+              { error: error.detail || "Failed to create session" },
               { status: response.status }
             )
           }
@@ -74,99 +226,131 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Handle JSON (create/finalize)
-    const body = await request.json()
-    const { action, sessionId } = body
-
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    }
-
-    if (WHISPER_API_KEY) {
-      headers["X-API-Key"] = WHISPER_API_KEY
-    }
-
-    // Create session
-    if (action === "create") {
-      try {
-        const response = await fetch(`${WHISPER_SERVICE_URL}/api/v1/sessions`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ prompt: body.prompt }),
-        })
-
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({ detail: "Unknown error" }))
-          return NextResponse.json(
-            { error: error.detail || "Failed to create session" },
-            { status: response.status }
-          )
-        }
-
-        const data = await response.json()
-        return NextResponse.json(data)
-      } catch (error: any) {
-        if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
-          return NextResponse.json(
-            { 
-              error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
-            },
-            { status: 503 }
-          )
-        }
-        throw error
-      }
-    }
-
     // Finalize session
     if (action === "finalize" && sessionId) {
-      try {
-        const response = await fetch(
-          `${WHISPER_SERVICE_URL}/api/v1/sessions/${sessionId}/finalize`,
-          {
-            method: "POST",
-            headers,
-          }
-        )
+      const sessionData = sessionStorage.get(sessionId)
+      const service = sessionData?.service || body.service || "whisper"
 
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({ detail: "Unknown error" }))
+      if (service === "deepgram") {
+        try {
+          const result = await finalizeDeepgramSession(sessionId)
+          const finalTranscript = sessionData?.transcript || ""
+
+          // Save final transcript to database
+          if (finalTranscript.trim()) {
+            try {
+              const { prisma } = await import("@/lib/prisma")
+              await prisma.transcription.create({
+                data: {
+                  text: finalTranscript.trim(),
+                  userId: session.user.id,
+                },
+              })
+            } catch (dbError: any) {
+              console.error("Failed to save transcription to database:", dbError)
+            }
+          }
+
+          // Clean up session
+          sessionStorage.delete(sessionId)
+
+          return NextResponse.json({
+            session_id: sessionId,
+            transcript: finalTranscript,
+            is_final: true,
+          })
+        } catch (error: any) {
+          console.error("Deepgram finalize error:", error)
           return NextResponse.json(
-            { error: error.detail || "Failed to finalize session" },
-            { status: response.status }
+            { error: error.message || "Failed to finalize Deepgram session" },
+            { status: 500 }
           )
         }
+      } else if (service === "assemblyai") {
+        try {
+          const result = await finalizeAssemblyAISession(sessionId)
+          const finalTranscript = sessionData?.transcript || ""
+
+          // Save final transcript to database
+          if (finalTranscript.trim()) {
+            try {
+              const { prisma } = await import("@/lib/prisma")
+              await prisma.transcription.create({
+                data: {
+                  text: finalTranscript.trim(),
+                  userId: session.user.id,
+                },
+              })
+            } catch (dbError: any) {
+              console.error("Failed to save transcription to database:", dbError)
+            }
+          }
+
+          // Clean up session
+          sessionStorage.delete(sessionId)
+
+          return NextResponse.json({
+            session_id: sessionId,
+            transcript: finalTranscript,
+            is_final: true,
+          })
+        } catch (error: any) {
+          console.error("AssemblyAI finalize error:", error)
+          return NextResponse.json(
+            { error: error.message || "Failed to finalize AssemblyAI session" },
+            { status: 500 }
+          )
+        }
+      } else {
+        // Default to Whisper service
+        try {
+          const response = await fetch(
+            `${WHISPER_SERVICE_URL}/api/v1/sessions/${sessionId}/finalize`,
+            {
+              method: "POST",
+              headers,
+            }
+          )
+
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: "Unknown error" }))
+            return NextResponse.json(
+              { error: error.detail || "Failed to finalize session" },
+              { status: response.status }
+            )
+          }
 
           const data = await response.json()
 
-        // Save final transcript to database
-        if (data.transcript?.trim()) {
-          try {
-          const { prisma } = await import("@/lib/prisma")
-          await prisma.transcription.create({
-            data: {
-              text: data.transcript.trim(),
-              userId: session.user.id,
-            },
-          })
-          } catch (dbError: any) {
-            // Log database error but don't fail the request
-            console.error("Failed to save transcription to database:", dbError)
-            // Continue and return the transcript even if DB save fails
+          // Save final transcript to database
+          if (data.transcript?.trim()) {
+            try {
+              const { prisma } = await import("@/lib/prisma")
+              await prisma.transcription.create({
+                data: {
+                  text: data.transcript.trim(),
+                  userId: session.user.id,
+                },
+              })
+            } catch (dbError: any) {
+              // Log database error but don't fail the request
+              console.error("Failed to save transcription to database:", dbError)
+              // Continue and return the transcript even if DB save fails
+            }
           }
-        }
 
-        return NextResponse.json(data)
-      } catch (error: any) {
-        if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
-          return NextResponse.json(
-            { 
-              error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
-            },
-            { status: 503 }
-          )
+          return NextResponse.json(data)
+        } catch (error: any) {
+          if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
+            return NextResponse.json(
+              { 
+                error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
+              },
+              { status: 503 }
+            )
+          }
+          throw error
         }
-        throw error
       }
     }
 
