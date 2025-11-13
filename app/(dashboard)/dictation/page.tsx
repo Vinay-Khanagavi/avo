@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
+import { DemoSection } from "@/components/landing/demo-section"
 import { MicrophoneButton } from "@/components/dictation/microphone-button"
 import { TranscriptionDisplay } from "@/components/dictation/transcription-display"
 import {
@@ -89,29 +90,15 @@ export default function DictationPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="space-y-8">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold">Voice Dictation</h1>
-          <p className="text-muted-foreground">
-            Click the microphone button to start recording. Your speech will be transcribed in real-time.
-          </p>
-        </div>
-
-        <div className="flex justify-center">
-          <MicrophoneButton
-            onStart={handleStart}
-            onStop={handleStop}
-            onChunk={handleChunk}
-            isRecording={isRecording}
-            disabled={isProcessing}
-          />
-        </div>
-
-        <TranscriptionDisplay
-          transcript={transcript}
-          isProcessing={isProcessing || isRecording}
-        />
-      </div>
+      <DemoSection 
+        transcript={transcript}
+        setTranscript={setTranscript}
+        isRecording={isRecording}
+        isProcessing={isProcessing}
+        onStart={handleStart}
+        onStop={handleStop}
+        onChunk={handleChunk}
+      />
     </div>
   )
 }

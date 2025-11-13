@@ -1,0 +1,234 @@
+"use client"
+
+import { useState, useEffect, useRef } from "react"
+import { gsap } from "gsap"
+import { Button } from "@/components/ui/button"
+import { MicrophoneButton } from "@/components/dictation/microphone-button"
+import Link from "next/link"
+import { Mic, Check } from "lucide-react"
+
+type TabType = "prompt" | "message" | "list" | "email"
+
+interface TabContent {
+  heading: string
+  description: string
+  content: string | React.ReactNode
+  isEmail?: boolean
+}
+
+interface DemoSectionProps {
+  transcript?: string
+  setTranscript?: (text: string) => void
+  isRecording?: boolean
+  isProcessing?: boolean
+  onStart?: () => void
+  onStop?: () => void
+  onChunk?: (chunk: Blob) => void
+}
+
+const tabContents: Record<TabType, TabContent> = {
+  prompt: {
+    heading: "Try writing a detailed AI prompt.",
+    description: "Flow makes it easy to give detailed prompts to ChatGPT, Cursor, or other AI tools.",
+    content: "Plan a week-long itinerary for a trip to Italy that prioritizes historical sightseeing and local food tours. I prefer to see attractions in the mornings, take naps in the afternoons, and then have nice dinners solid by nightlife in the evenings.",
+  },
+  message: {
+    heading: "Try messaging a friend.",
+    description: "Flow makes texting your friends easy, and even edits filler words and corrections for you.",
+    content: "Hey Michelle, meet me at my apartment lobby at 6pm, actually no, 7pm.",
+  },
+  list: {
+    heading: "Try making a grocery list.",
+    description: "Watch as Flow formats lists for you in Notes or whatever note-taking tool you use.",
+    content: (
+      <>
+        I want to grab three things at the grocery store:
+        <br />
+        <br />
+        1. Milk for the cake
+        <br />
+        2. Eggs for breakfast
+        <br />
+        3. White bread
+      </>
+    ),
+  },
+  email: {
+    heading: "Try drafting an email.",
+    description: "Watch as Flow auto-formats emails for you in Gmail, Superhuman, Outlook.",
+    isEmail: true,
+    content: (
+      <>
+        Hi Nora,
+        <br />
+        <br />
+        I&apos;m looking forward to working with you. Are you available to meet at 3pm on Friday?
+        <br />
+        <br />
+        Best,
+        <br />
+        Jacob
+      </>
+    ),
+  },
+}
+
+export function DemoSection({
+  transcript = "",
+  setTranscript,
+  isRecording = false,
+  isProcessing = false,
+  onStart,
+  onStop,
+  onChunk,
+}: DemoSectionProps) {
+  const [activeTab, setActiveTab] = useState<TabType>("prompt")
+  const contentRef = useRef<HTMLDivElement>(null)
+  const isInteractive = !!onStart && !!onStop && !!onChunk
+
+  const tabs = [
+    { id: "prompt" as TabType, label: "Write the perfect prompt" },
+    { id: "message" as TabType, label: "Message a friend" },
+    { id: "list" as TabType, label: "Write a list" },
+    { id: "email" as TabType, label: "Draft an email" },
+  ]
+
+  const currentContent = tabContents[activeTab]
+
+  useEffect(() => {
+    if (contentRef.current) {
+      gsap.fromTo(
+        contentRef.current,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" }
+      )
+    }
+  }, [activeTab])
+
+  // Reset transcript when switching tabs in interactive mode
+  useEffect(() => {
+    if (isInteractive && setTranscript) {
+      setTranscript("")
+    }
+  }, [activeTab, isInteractive, setTranscript])
+
+  return (
+    <section className="w-full py-20 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* Tab Buttons */}
+        <div className="flex flex-wrap gap-3 justify-center mb-12">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`
+                px-6 py-3 rounded-lg font-sans font-semibold text-sm md:text-base
+                transition-all duration-300 ease-out relative
+                ${
+                  activeTab === tab.id
+                    ? "bg-[#ffa946] text-black shadow-[3px_3px_2px_0px_rgba(0,0,0,0.4)] border-2 border-white"
+                    : "bg-white text-black border-2 border-black hover:bg-gray-50"
+                }
+              `}
+              style={{
+                transform: activeTab === tab.id ? "rotate(-2deg)" : "rotate(0deg)",
+              }}
+            >
+              <div>{tab.label}</div>
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        <div ref={contentRef} className="space-y-8">
+          {/* Heading and Description */}
+          <div className="text-center space-y-4">
+            <h2 className="text-3xl md:text-4xl font-medium font-serif">
+              {currentContent.heading}
+            </h2>
+            <p className="text-lg text-muted-foreground font-sans font-medium max-w-2xl mx-auto">
+              {currentContent.description}
+            </p>
+          </div>
+
+          {/* Input Area */}
+          <div className="bg-white rounded-xl border border-gray-300 p-6 md:p-8 shadow-sm">
+            {currentContent.isEmail ? (
+              <div className="space-y-6">
+                {/* Email Header */}
+                <div className="space-y-4 pb-4 border-b border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground font-sans font-medium">To</span>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400"></div>
+                    <span className="font-sans font-medium">Nora Miller</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground font-sans font-medium">Subject</span>
+                    <span className="font-sans font-semibold">My first Flow message</span>
+                  </div>
+                </div>
+                {/* Email Body */}
+                <div className="min-h-[200px] text-foreground font-sans font-medium leading-relaxed whitespace-pre-wrap">
+                  {isInteractive && transcript ? transcript : currentContent.content}
+                </div>
+              </div>
+            ) : activeTab === "list" ? (
+              <div className="space-y-4">
+                <h3 className="text-xl font-semibold font-sans mb-4">Grocery List</h3>
+                <div className="min-h-[150px] text-foreground font-sans font-medium leading-relaxed whitespace-pre-wrap">
+                  {isInteractive && transcript ? transcript : currentContent.content}
+                </div>
+              </div>
+            ) : (
+              <div className="min-h-[150px] text-foreground font-sans font-medium leading-relaxed whitespace-pre-wrap">
+                {isInteractive && transcript ? transcript : currentContent.content}
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          {isInteractive ? (
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-stretch sm:items-center">
+              <MicrophoneButton
+                onStart={onStart!}
+                onStop={onStop!}
+                onChunk={onChunk!}
+                isRecording={isRecording}
+                disabled={isProcessing}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-stretch sm:items-center">
+              <Button
+                variant="glow"
+                size="lg"
+                className="text-base px-6 py-4 font-sans font-semibold"
+                disabled
+              >
+                <Mic className="w-5 h-5 mr-2" />
+                Start dictating
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="text-base px-6 py-4 font-sans font-medium border-2 bg-white hover:bg-gray-50"
+                disabled
+              >
+                <Check className="w-5 h-5 mr-2" />
+                Stop dictating
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                className="text-base px-6 py-4 font-sans font-semibold bg-black text-white hover:bg-gray-800"
+              >
+                <Link href="/signup">Download for free</Link>
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
