@@ -32,8 +32,12 @@ from merge_transcripts import merge_at_word_boundary
 load_dotenv()
 
 # Configure logging
+# Configure logging level based on DEBUG_TRANSCRIPTION
+DEBUG_TRANSCRIPTION_ENV = os.getenv("DEBUG_TRANSCRIPTION", "false").lower() == "true"
+log_level = logging.DEBUG if DEBUG_TRANSCRIPTION_ENV else logging.INFO
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -139,6 +143,17 @@ SESSION_TTL = int(os.getenv("SESSION_TTL", "600"))  # 10 minutes
 BUFFER_OVERLAP_SECONDS = float(os.getenv("BUFFER_OVERLAP_SECONDS", "2.0"))
 WHISPER_API_KEY = os.getenv("WHISPER_API_KEY", "")
 REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "true").lower() == "true"
+# Transcription quality settings
+WHISPER_TEMPERATURE = float(os.getenv("WHISPER_TEMPERATURE", "0.0"))  # 0 = deterministic, higher = more creative
+WHISPER_BEST_OF = int(os.getenv("WHISPER_BEST_OF", "5"))  # Number of candidates to consider
+WHISPER_BEAM_SIZE = int(os.getenv("WHISPER_BEAM_SIZE", "5"))  # Beam search size
+WHISPER_COMPRESSION_RATIO_THRESHOLD = float(os.getenv("WHISPER_COMPRESSION_RATIO_THRESHOLD", "2.4"))  # Filter out repetitive text
+WHISPER_LOGPROB_THRESHOLD = float(os.getenv("WHISPER_LOGPROB_THRESHOLD", "-1.0"))  # Filter low-confidence words (lower = more lenient)
+WHISPER_NO_SPEECH_THRESHOLD = float(os.getenv("WHISPER_NO_SPEECH_THRESHOLD", "0.6"))  # Silence detection threshold
+# Audio processing settings
+ENABLE_AUDIO_NORMALIZATION = os.getenv("ENABLE_AUDIO_NORMALIZATION", "true").lower() == "true"  # Enable loudnorm filter
+ENABLE_NOISE_FILTER = os.getenv("ENABLE_NOISE_FILTER", "true").lower() == "true"  # Enable highpass filter
+DEBUG_TRANSCRIPTION = os.getenv("DEBUG_TRANSCRIPTION", "false").lower() == "true"  # Enable detailed logging
 
 # Validate API key configuration
 if REQUIRE_API_KEY and not WHISPER_API_KEY:
@@ -322,17 +337,29 @@ async def create_session(
         raise HTTPException(status_code=503, detail="Maximum sessions reached")
     
     session_id = str(uuid.uuid4())
-    session_data = {
+    
+    # Build enhanced prompt with context
+    # Keep prompts simple and focused - avoid overly complex instructions
+    enhanced_prompt = None
+    if session_data.prompt:
+        # Use user-provided prompt as-is (they know best what context to provide)
+        enhanced_prompt = session_data.prompt
+    else:
+        # Default prompt for general speech - keep it simple and focused
+        # This helps Whisper understand it's professional, clear speech
+        enhanced_prompt = "This is a clear, professional conversation with proper names and punctuation."
+    
+    session_data_dict = {
         "session_id": session_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "transcript": "",
-        "prompt": session_data.prompt,
+        "prompt": enhanced_prompt,
         "chunk_count": 0,
         "last_chunk_time": None,
         "buffer_audio": None,  # Will store last 2 seconds of audio
     }
     
-    save_session(session_id, session_data)
+    save_session(session_id, session_data_dict)
     
     return {"session_id": session_id, "status": "created"}
 
@@ -454,9 +481,30 @@ async def process_chunk(
                 raise HTTPException(status_code=400, detail="Invalid audio chunk format")
             
             # Capture stderr to see actual ffmpeg errors
+            # Build ffmpeg pipeline with optional normalization
+            ffmpeg_input = ffmpeg.input(tmp_webm_path)
+            
+            # Apply audio filters if enabled
+            if ENABLE_AUDIO_NORMALIZATION or ENABLE_NOISE_FILTER:
+                try:
+                    # Try with normalization filters
+                    if ENABLE_AUDIO_NORMALIZATION and ENABLE_NOISE_FILTER:
+                        ffmpeg_chain = ffmpeg_input.filter('loudnorm', I=-16.0, TP=-1.5, LRA=11.0).filter('highpass', f=80)
+                    elif ENABLE_AUDIO_NORMALIZATION:
+                        ffmpeg_chain = ffmpeg_input.filter('loudnorm', I=-16.0, TP=-1.5, LRA=11.0)
+                    elif ENABLE_NOISE_FILTER:
+                        ffmpeg_chain = ffmpeg_input.filter('highpass', f=80)
+                    else:
+                        ffmpeg_chain = ffmpeg_input
+                except Exception as filter_error:
+                    logger.warning(f"Audio filter setup failed, using basic conversion: {filter_error}")
+                    ffmpeg_chain = ffmpeg_input
+            else:
+                ffmpeg_chain = ffmpeg_input
+            
+            # Convert to WAV format
             process = (
-                ffmpeg
-                .input(tmp_webm_path)
+                ffmpeg_chain
                 .output(
                     tmp_wav_path,
                     acodec='pcm_s16le',
@@ -516,11 +564,21 @@ async def process_chunk(
             combined_wav_path = tmp_wav_path.replace(".wav", "_combined.wav")
             try:
                 # Concatenate audio files using ffmpeg
-                input_video = ffmpeg.input(buffer_audio_path)
-                input_audio = ffmpeg.input(tmp_wav_path)
+                input_buffer = ffmpeg.input(buffer_audio_path)
+                input_new = ffmpeg.input(tmp_wav_path)
+                
+                # Build concatenation pipeline
+                concat_chain = ffmpeg.concat(input_buffer, input_new, v=0, a=1)
+                
+                # Apply normalization if enabled
+                if ENABLE_AUDIO_NORMALIZATION:
+                    try:
+                        concat_chain = concat_chain.filter('loudnorm', I=-16.0, TP=-1.5, LRA=11.0)
+                    except Exception as e:
+                        logger.warning(f"Normalization filter failed during concatenation: {e}")
+                
                 (
-                    ffmpeg
-                    .concat(input_video, input_audio, v=0, a=1)
+                    concat_chain
                     .output(combined_wav_path, acodec='pcm_s16le', ac=1, ar='16000')
                     .overwrite_output()
                     .run(quiet=True)
@@ -533,27 +591,95 @@ async def process_chunk(
         else:
             audio_path = tmp_wav_path
         
-        # Transcribe
-        result = model.transcribe(
-            audio_path,
-            language="en",
-            initial_prompt=session.get("prompt"),
-            fp16=False,  # Use fp32 for CPU
-        )
+        # Validate audio file exists and has content
+        if not os.path.exists(audio_path):
+            raise HTTPException(status_code=500, detail="Audio file not found after conversion")
         
-        new_transcript = result["text"].strip()
+        # Check audio file size (should be at least a few KB)
+        audio_size = os.path.getsize(audio_path)
+        if audio_size < 1000:  # Less than 1KB is suspicious
+            logger.warning(f"Audio file is very small: {audio_size} bytes")
+        
+        # Transcribe with improved settings for accuracy
+        # Note: condition_on_previous_text disabled to prevent hallucinations from previous errors
+        transcribe_options = {
+            "language": "en",
+            "fp16": False,  # Use fp32 for CPU
+            "temperature": WHISPER_TEMPERATURE,  # 0 = deterministic, less creative errors
+            "best_of": WHISPER_BEST_OF,  # Consider multiple candidates
+            "beam_size": WHISPER_BEAM_SIZE,  # Beam search for better accuracy
+            "compression_ratio_threshold": WHISPER_COMPRESSION_RATIO_THRESHOLD,  # Filter repetitive text (higher = more lenient)
+            "logprob_threshold": WHISPER_LOGPROB_THRESHOLD,  # Filter low-confidence words (lower = more lenient, -1.0 = disabled)
+            "no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,  # Silence detection (lower = more sensitive)
+            "condition_on_previous_text": False,  # DISABLED: Can cause hallucinations from previous errors
+            "word_timestamps": True,  # Enable word-level timestamps for better overlap handling
+            "suppress_blank": True,  # Suppress blank outputs
+            "suppress_tokens": [-1],  # Suppress special tokens
+        }
+        
+        # Add initial prompt if available (provides context for better accuracy)
+        if session.get("prompt"):
+            transcribe_options["initial_prompt"] = session.get("prompt")
+            if DEBUG_TRANSCRIPTION:
+                logger.info(f"Using initial prompt: {session.get('prompt')[:100]}...")
+        
+        if DEBUG_TRANSCRIPTION:
+            logger.info(f"Transcribing audio: {audio_path} ({audio_size} bytes)")
+            logger.info(f"Transcription options: {transcribe_options}")
+        
+        result = model.transcribe(audio_path, **transcribe_options)
+        
+        if DEBUG_TRANSCRIPTION:
+            logger.info(f"Raw transcription result: {result.get('text', '')[:200]}...")
+            logger.info(f"Number of segments: {len(result.get('segments', []))}")
+            if result.get('segments'):
+                logger.info(f"First segment: {result['segments'][0]}")
+                logger.info(f"Last segment: {result['segments'][-1]}")
+        
+        # Extract timestamps for precise overlap handling
+        segments = result.get("segments", [])
+        full_transcript = result["text"].strip()
         
         # Extract only new portion if we used buffer overlap
         if buffer_audio_path and os.path.exists(buffer_audio_path) and audio_path != tmp_wav_path:
-            # We transcribed buffer + new chunk, but only want the new portion
-            # Estimate: if buffer was 2s and new chunk is 5s, extract last ~5s worth of text
-            # For now, we'll use the full transcript and let merging handle it
-            # In production, you'd want to extract timestamps from Whisper
-            pass
+            # Get duration of buffer audio to know where new content starts
+            try:
+                buffer_probe = ffmpeg.probe(buffer_audio_path)
+                buffer_duration = float(buffer_probe['streams'][0]['duration'])
+                
+                # Extract only segments that start after buffer duration
+                # Add small tolerance (0.5s) to account for timing variations
+                new_segments = [
+                    seg for seg in segments 
+                    if seg.get("start", 0) >= (buffer_duration - 0.5)
+                ]
+                
+                if new_segments:
+                    # Reconstruct transcript from new segments only
+                    new_transcript = " ".join([seg["text"].strip() for seg in new_segments]).strip()
+                    logger.debug(f"Extracted new portion: {len(new_segments)} segments, "
+                               f"buffer_duration={buffer_duration:.2f}s")
+                else:
+                    # Fallback: if no segments found, use merging logic
+                    logger.warning("No new segments found after buffer, using full transcript")
+                    new_transcript = full_transcript
+            except Exception as e:
+                logger.warning(f"Failed to extract new portion using timestamps: {e}. Using full transcript.")
+                new_transcript = full_transcript
+        else:
+            new_transcript = full_transcript
         
         # Merge with existing transcript
         existing_transcript = session.get("transcript", "")
+        
+        if DEBUG_TRANSCRIPTION:
+            logger.info(f"Before merge - Existing: '{existing_transcript[-100:] if len(existing_transcript) > 100 else existing_transcript}'")
+            logger.info(f"Before merge - New: '{new_transcript[:100] if len(new_transcript) > 100 else new_transcript}'")
+        
         merged_transcript = merge_at_word_boundary(existing_transcript, new_transcript)
+        
+        if DEBUG_TRANSCRIPTION:
+            logger.info(f"After merge - Merged: '{merged_transcript[-150:] if len(merged_transcript) > 150 else merged_transcript}'")
         
         # Store last 2 seconds of audio as buffer for next chunk
         buffer_wav_path = tmp_wav_path.replace(".wav", "_buffer.wav")
