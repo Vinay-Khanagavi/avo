@@ -83,27 +83,78 @@ export function createMediaRecorder(stream: MediaStream): MediaRecorder {
 }
 
 /**
- * Slice audio into chunks (5 seconds each)
+ * Slice audio into 5-second chunks and stream them incrementally
+ * Implements sound clip slicing with buffer overlap on the server side
+ * 
+ * Strategy:
+ * - First chunk has WebM headers - send immediately
+ * - Subsequent chunks are fragments - combine with first chunk to create complete WebM
+ * - Stream slices immediately for real-time transcription
+ * - Server handles buffer overlap and incremental merging
  */
 export function createAudioSlicer(
   mediaRecorder: MediaRecorder,
   onChunk: (chunk: Blob) => void
 ): () => void {
-  const chunks: Blob[] = []
-  const CHUNK_DURATION_MS = 5000 // 5 seconds
+  const CHUNK_DURATION_MS = 5000 // 5 seconds per slice
+  const firstChunkRef: Blob[] = [] // Store first chunk (has headers)
+  const accumulatedChunks: Blob[] = []
+  let chunkCount = 0
 
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
-      chunks.push(event.data)
-      onChunk(event.data)
+      chunkCount++
+      
+      if (chunkCount === 1) {
+        // First chunk has WebM headers - send immediately for real-time processing
+        firstChunkRef.push(event.data)
+        accumulatedChunks.push(event.data)
+        
+        // Send first chunk immediately if it's valid
+        if (event.data.size > 2048) {
+          onChunk(event.data)
+        }
+      } else {
+        // Subsequent chunks are fragments - combine with first chunk to create complete WebM
+        accumulatedChunks.push(event.data)
+        
+        // Create complete segment by combining first chunk (with headers) + fragments
+        // This creates a valid WebM file that ffmpeg can process
+        const completeSegment = new Blob(accumulatedChunks, { type: 'audio/webm;codecs=opus' })
+        
+        // Send immediately for streaming transcription
+        // Server will handle buffer overlap and merge with existing transcript
+        if (completeSegment.size > 2048) {
+          onChunk(completeSegment)
+        }
+        
+        // Keep only the last fragment for next iteration (for continuity)
+        // This maintains the buffer overlap on client side too
+        if (accumulatedChunks.length > 1) {
+          // Keep first chunk (headers) + last fragment
+          const lastFragment = accumulatedChunks[accumulatedChunks.length - 1]
+          accumulatedChunks.length = 0
+          accumulatedChunks.push(firstChunkRef[0])
+          accumulatedChunks.push(lastFragment)
+        }
+      }
     }
   }
 
-  // Start recording with timeslice for automatic chunking
+  // Start recording with timeslice for automatic 5-second chunking
   mediaRecorder.start(CHUNK_DURATION_MS)
 
   return () => {
     mediaRecorder.stop()
+    
+    // Send any remaining accumulated chunks when stopping
+    // This ensures the final slice is processed
+    if (accumulatedChunks.length > 0) {
+      const finalSegment = new Blob(accumulatedChunks, { type: 'audio/webm;codecs=opus' })
+      if (finalSegment.size > 0) {
+        onChunk(finalSegment)
+      }
+    }
   }
 }
 

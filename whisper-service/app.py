@@ -7,14 +7,16 @@ import os
 import uuid
 import asyncio
 import tempfile
-from datetime import datetime, timedelta
-from typing import Optional, Dict
+import logging
+import json
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, List
 from queue import Queue
 from threading import Lock
 
 import whisper
 import ffmpeg
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -29,15 +31,31 @@ from merge_transcripts import merge_at_word_boundary
 # Load environment variables
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Initialize FastAPI app
 app = FastAPI(title="Whisper Transcription Service", version="1.0.0")
+
+# CORS configuration - restrict origins in production
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()]
+
+# If no origins specified, default to allowing all (with warning)
+if not ALLOWED_ORIGINS:
+    logger.warning("ALLOWED_ORIGINS not set. CORS is open to all origins. Set ALLOWED_ORIGINS env var for production.")
+    ALLOWED_ORIGINS = ["*"]
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -46,14 +64,46 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Redis connection
+# Redis connection with improved error handling
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-try:
-    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-    redis_client.ping()
-except Exception as e:
-    print(f"Warning: Redis connection failed: {e}. Using in-memory storage.")
-    redis_client = None
+redis_client = None
+redis_retry_count = 0
+MAX_REDIS_RETRIES = 3
+
+def init_redis():
+    """Initialize Redis connection with retry logic."""
+    global redis_client, redis_retry_count
+    if redis_client is not None:
+        return redis_client
+    
+    try:
+        redis_client = redis.from_url(
+            REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+            retry_on_timeout=True,
+            health_check_interval=30
+        )
+        redis_client.ping()
+        logger.info(f"Redis connected successfully: {REDIS_URL}")
+        redis_retry_count = 0
+        return redis_client
+    except redis.ConnectionError as e:
+        redis_retry_count += 1
+        if redis_retry_count <= MAX_REDIS_RETRIES:
+            logger.warning(f"Redis connection failed (attempt {redis_retry_count}/{MAX_REDIS_RETRIES}): {e}")
+        else:
+            logger.error(f"Redis connection failed after {MAX_REDIS_RETRIES} attempts: {e}. Using in-memory storage.")
+            redis_client = None
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected Redis error: {e}. Using in-memory storage.")
+        redis_client = None
+        return None
+
+# Initialize Redis on startup
+init_redis()
 
 # In-memory fallback storage
 sessions: Dict[str, Dict] = {}
@@ -70,6 +120,14 @@ MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "5"))
 SESSION_TTL = int(os.getenv("SESSION_TTL", "600"))  # 10 minutes
 BUFFER_OVERLAP_SECONDS = float(os.getenv("BUFFER_OVERLAP_SECONDS", "2.0"))
 WHISPER_API_KEY = os.getenv("WHISPER_API_KEY", "")
+REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "true").lower() == "true"
+
+# Validate API key configuration
+if REQUIRE_API_KEY and not WHISPER_API_KEY:
+    logger.warning("REQUIRE_API_KEY is true but WHISPER_API_KEY is not set. API authentication is disabled.")
+    logger.warning("Set WHISPER_API_KEY environment variable or set REQUIRE_API_KEY=false to disable this warning.")
+elif not REQUIRE_API_KEY:
+    logger.warning("API key authentication is disabled (REQUIRE_API_KEY=false). This is not recommended for production.")
 
 # Processing queue
 processing_queue = Queue(maxsize=10)
@@ -81,56 +139,95 @@ def get_whisper_model():
     if whisper_model is None:
         with model_lock:
             if whisper_model is None:
-                print(f"Loading Whisper model: {WHISPER_MODEL}")
+                logger.info(f"Loading Whisper model: {WHISPER_MODEL}")
                 whisper_model = whisper.load_model(WHISPER_MODEL, device=WHISPER_DEVICE)
-                print("Whisper model loaded successfully")
+                logger.info("Whisper model loaded successfully")
     return whisper_model
 
 
 def get_session_storage():
     """Get session storage (Redis or in-memory)."""
+    # Try to reconnect if Redis was lost
+    if redis_client is None:
+        init_redis()
     return redis_client if redis_client else sessions
 
 
 def get_session(session_id: str) -> Optional[Dict]:
-    """Get session data."""
+    """Get session data with error handling."""
     if redis_client:
-        import json
-        data = redis_client.get(f"session:{session_id}")
-        return json.loads(data) if data else None
+        try:
+            data = redis_client.get(f"session:{session_id}")
+            if data:
+                return json.loads(data)
+            return None
+        except redis.RedisError as e:
+            logger.error(f"Redis error getting session {session_id}: {e}")
+            # Fallback to in-memory
+            with sessions_lock:
+                return sessions.get(session_id)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for session {session_id}: {e}")
+            return None
     else:
         with sessions_lock:
             return sessions.get(session_id)
 
 
 def save_session(session_id: str, data: Dict):
-    """Save session data."""
+    """Save session data with error handling."""
     if redis_client:
-        import json
-        redis_client.setex(
-            f"session:{session_id}",
-            SESSION_TTL,
-            json.dumps(data)
-        )
+        try:
+            redis_client.setex(
+                f"session:{session_id}",
+                SESSION_TTL,
+                json.dumps(data)
+            )
+        except redis.RedisError as e:
+            logger.error(f"Redis error saving session {session_id}: {e}")
+            # Fallback to in-memory
+            with sessions_lock:
+                sessions[session_id] = data
+            # Try to reconnect
+            init_redis()
     else:
         with sessions_lock:
             sessions[session_id] = data
 
 
 def delete_session(session_id: str):
-    """Delete session data."""
+    """Delete session data with error handling."""
     if redis_client:
-        redis_client.delete(f"session:{session_id}")
+        try:
+            redis_client.delete(f"session:{session_id}")
+        except redis.RedisError as e:
+            logger.error(f"Redis error deleting session {session_id}: {e}")
+            # Fallback to in-memory
+            with sessions_lock:
+                sessions.pop(session_id, None)
     else:
         with sessions_lock:
             sessions.pop(session_id, None)
 
 
-def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key")) -> bool:
-    """Verify API key."""
+def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key")):
+    """Verify API key. Raises HTTPException if invalid."""
+    if not REQUIRE_API_KEY:
+        return  # API key not required
+    
     if not WHISPER_API_KEY:
-        return True  # No API key required
-    return api_key == WHISPER_API_KEY
+        logger.warning("API key verification requested but WHISPER_API_KEY not set")
+        return  # Allow if not configured (backward compatibility)
+    
+    if not api_key:
+        logger.warning("API key required but not provided in request")
+        raise HTTPException(status_code=401, detail="API key required")
+    
+    if api_key != WHISPER_API_KEY:
+        logger.warning(f"Invalid API key attempted")
+        raise HTTPException(status_code=403, detail="Invalid API key")
+    
+    return  # Valid API key
 
 
 # Pydantic models
@@ -147,25 +244,47 @@ class ChunkResponse(BaseModel):
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    redis_connected = False
+    active_sessions = 0
+    
+    if redis_client:
+        try:
+            redis_client.ping()
+            redis_connected = True
+            active_sessions = redis_client.dbsize()
+        except Exception as e:
+            logger.warning(f"Redis health check failed: {e}")
+            redis_connected = False
+    
+    if not redis_connected:
+        with sessions_lock:
+            active_sessions = len(sessions)
+    
     return {
         "status": "healthy",
         "model": WHISPER_MODEL,
         "device": WHISPER_DEVICE,
-        "redis_connected": redis_client is not None,
-        "active_sessions": len(sessions) if not redis_client else redis_client.dbsize()
+        "redis_connected": redis_connected,
+        "active_sessions": active_sessions
     }
 
 
 @app.post("/api/v1/sessions")
 @limiter.limit("10/minute")
 async def create_session(
-    request: SessionCreate,
+    request: Request,
+    session_data: SessionCreate,
     request_obj=Depends(verify_api_key)
 ):
     """Create a new transcription session."""
     # Check session limit
     if redis_client:
-        active_count = redis_client.dbsize()
+        try:
+            active_count = redis_client.dbsize()
+        except redis.RedisError as e:
+            logger.error(f"Redis error checking session count: {e}")
+            with sessions_lock:
+                active_count = len(sessions)
     else:
         with sessions_lock:
             active_count = len(sessions)
@@ -176,9 +295,9 @@ async def create_session(
     session_id = str(uuid.uuid4())
     session_data = {
         "session_id": session_id,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "transcript": "",
-        "prompt": request.prompt,
+        "prompt": session_data.prompt,
         "chunk_count": 0,
         "last_chunk_time": None,
         "buffer_audio": None,  # Will store last 2 seconds of audio
@@ -190,7 +309,7 @@ async def create_session(
 
 
 @app.get("/api/v1/sessions/{session_id}")
-async def get_session(session_id: str, request_obj=Depends(verify_api_key)):
+async def get_session_endpoint(session_id: str, request_obj=Depends(verify_api_key)):
     """Get current session state."""
     session = get_session(session_id)
     if not session:
@@ -207,15 +326,27 @@ async def get_session(session_id: str, request_obj=Depends(verify_api_key)):
 @app.post("/api/v1/sessions/{session_id}/chunks")
 @limiter.limit("20/minute")
 async def process_chunk(
+    request: Request,
     session_id: str,
     file: UploadFile = File(...),
     request_obj=Depends(verify_api_key)
 ):
     """Process an audio chunk and return incremental transcript."""
     # Verify session exists
-    session = get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        session = get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Ensure session is a dict, not a coroutine
+        if not isinstance(session, dict):
+            logger.error(f"Invalid session type: {type(session)} for session {session_id}")
+            raise HTTPException(status_code=500, detail="Invalid session data")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting session {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get session: {str(e)}")
     
     # Check queue capacity
     if processing_queue.full():
@@ -225,6 +356,22 @@ async def process_chunk(
         # Read audio file
         audio_data = await file.read()
         
+        # Validate audio data - WebM files need at least a few KB to be valid
+        if not audio_data or len(audio_data) < 2048:  # Minimum 2KB for valid WebM chunk
+            logger.warning(f"Audio chunk too small: {len(audio_data) if audio_data else 0} bytes - skipping")
+            # Return empty transcript for small/incomplete chunks
+            session = get_session(session_id)
+            if session:
+                return {
+                    "session_id": session_id,
+                    "transcript": session.get("transcript", ""),
+                    "incremental": "",
+                    "is_final": False,
+                }
+            raise HTTPException(status_code=400, detail=f"Audio chunk is too small ({len(audio_data) if audio_data else 0} bytes). Minimum 2KB required.")
+        
+        logger.debug(f"Processing audio chunk: {len(audio_data)} bytes for session {session_id}")
+        
         # Save to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp_file:
             tmp_file.write(audio_data)
@@ -233,15 +380,99 @@ async def process_chunk(
         # Convert WebM to WAV using ffmpeg
         tmp_wav_path = tmp_webm_path.replace(".webm", ".wav")
         try:
-            (
+            # First, probe the file to check if it's valid
+            probe_valid = False
+            try:
+                probe = ffmpeg.probe(tmp_webm_path)
+                if probe and 'streams' in probe and len(probe['streams']) > 0:
+                    probe_valid = True
+                    logger.debug(f"WebM file validated: {len(probe.get('streams', []))} stream(s)")
+                else:
+                    logger.warning(f"Invalid WebM file: no streams found")
+            except Exception as probe_error:
+                error_str = str(probe_error)
+                # Check if it's an EBML/header parsing error (incomplete chunk)
+                if "EBML" in error_str or "Invalid data" in error_str or "Error opening input" in error_str:
+                    logger.warning(f"Incomplete WebM chunk detected (likely MediaRecorder fragment): {probe_error}")
+                    # Cleanup and return current transcript without error
+                    if os.path.exists(tmp_webm_path):
+                        os.unlink(tmp_webm_path)
+                    session = get_session(session_id)
+                    if session:
+                        return {
+                            "session_id": session_id,
+                            "transcript": session.get("transcript", ""),
+                            "incremental": "",
+                            "is_final": False,
+                        }
+                    raise HTTPException(status_code=400, detail="Incomplete audio chunk - skipping")
+                else:
+                    logger.warning(f"ffmpeg probe failed: {probe_error}")
+            
+            # Only proceed if probe was successful or we want to try anyway
+            if not probe_valid:
+                logger.warning("Skipping chunk due to invalid probe")
+                if os.path.exists(tmp_webm_path):
+                    os.unlink(tmp_webm_path)
+                session = get_session(session_id)
+                if session:
+                    return {
+                        "session_id": session_id,
+                        "transcript": session.get("transcript", ""),
+                        "incremental": "",
+                        "is_final": False,
+                    }
+                raise HTTPException(status_code=400, detail="Invalid audio chunk format")
+            
+            # Capture stderr to see actual ffmpeg errors
+            process = (
                 ffmpeg
                 .input(tmp_webm_path)
-                .output(tmp_wav_path, acodec='pcm_s16le', ac=1, ar='16000')
+                .output(
+                    tmp_wav_path,
+                    acodec='pcm_s16le',
+                    ac=1,
+                    ar='16000',
+                    loglevel='error'
+                )
                 .overwrite_output()
-                .run(quiet=True)
+                .run(capture_stdout=True, capture_stderr=True)
             )
         except ffmpeg.Error as e:
-            os.unlink(tmp_webm_path)
+            # Log the actual ffmpeg error
+            error_msg = str(e)
+            stderr_msg = ""
+            if hasattr(e, 'stderr') and e.stderr:
+                stderr_msg = e.stderr.decode('utf-8', errors='ignore')
+                error_msg = f"{error_msg}\nffmpeg stderr: {stderr_msg}"
+            
+            # Check if it's an incomplete chunk error
+            if "EBML" in stderr_msg or "Invalid data" in stderr_msg or "Error opening input" in stderr_msg:
+                logger.warning(f"Incomplete WebM chunk (EBML error): {stderr_msg[:200]}")
+                # Cleanup and return current transcript without error
+                if os.path.exists(tmp_webm_path):
+                    os.unlink(tmp_webm_path)
+                session = get_session(session_id)
+                if session:
+                    return {
+                        "session_id": session_id,
+                        "transcript": session.get("transcript", ""),
+                        "incremental": "",
+                        "is_final": False,
+                    }
+                raise HTTPException(status_code=400, detail="Incomplete audio chunk - skipping")
+            
+            logger.error(f"ffmpeg conversion failed for session {session_id}: {error_msg}")
+            
+            # Cleanup temp file
+            if os.path.exists(tmp_webm_path):
+                os.unlink(tmp_webm_path)
+            
+            raise HTTPException(status_code=400, detail=f"Audio conversion failed: {error_msg}")
+        except Exception as e:
+            logger.error(f"Unexpected error during ffmpeg conversion: {e}", exc_info=True)
+            if os.path.exists(tmp_webm_path):
+                os.unlink(tmp_webm_path)
             raise HTTPException(status_code=400, detail=f"Audio conversion failed: {str(e)}")
         
         # Load Whisper model
@@ -268,7 +499,7 @@ async def process_chunk(
                 audio_path = combined_wav_path
             except Exception as e:
                 # Fallback to new chunk only if concatenation fails
-                print(f"Warning: Buffer concatenation failed: {e}. Using new chunk only.")
+                logger.warning(f"Buffer concatenation failed: {e}. Using new chunk only.")
                 audio_path = tmp_wav_path
         else:
             audio_path = tmp_wav_path
@@ -315,42 +546,67 @@ async def process_chunk(
             print(f"Warning: Buffer extraction failed: {e}")
             session["buffer_audio_path"] = None
         
-        # Update session
+        # Update session with merged transcript
         session["transcript"] = merged_transcript
         session["chunk_count"] = session.get("chunk_count", 0) + 1
-        session["last_chunk_time"] = datetime.utcnow().isoformat()
+        session["last_chunk_time"] = datetime.now(timezone.utc).isoformat()
         
         save_session(session_id, session)
         
-        # Cleanup temp files
-        os.unlink(tmp_webm_path)
+        logger.info(f"Processed chunk {session['chunk_count']} for session {session_id}: "
+                   f"merged transcript length={len(merged_transcript)}, "
+                   f"new text='{new_transcript[:50]}...'")
+        
+        # Cleanup temp files with improved error handling
+        temp_files_to_cleanup = [tmp_webm_path]
         if audio_path != tmp_wav_path and os.path.exists(audio_path):
-            os.unlink(audio_path)  # Remove combined file if created
-        # Keep tmp_wav_path for buffer extraction, then clean up old buffer
+            temp_files_to_cleanup.append(audio_path)
+        
+        # Clean up old buffer file
         old_buffer = session.get("buffer_audio_path")
         if old_buffer and old_buffer != buffer_wav_path and os.path.exists(old_buffer):
-            try:
-                os.unlink(old_buffer)
-            except:
-                pass
+            temp_files_to_cleanup.append(old_buffer)
         
+        # Clean up all temp files
+        for temp_file in temp_files_to_cleanup:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+                    logger.debug(f"Cleaned up temp file: {temp_file}")
+            except OSError as e:
+                logger.warning(f"Failed to cleanup temp file {temp_file}: {e}")
+        
+        # Note: tmp_wav_path is kept for buffer extraction, cleaned up in next iteration
+        
+        # Return merged transcript for continuous streaming transcription
+        # The merged transcript contains all previous slices merged with the latest slice
         return {
             "session_id": session_id,
-            "transcript": merged_transcript,
-            "incremental": new_transcript,
+            "transcript": merged_transcript,  # Complete merged transcript so far
+            "incremental": new_transcript,     # Just the new text from this slice
             "is_final": False,
         }
         
     except Exception as e:
-        # Cleanup on error
+        # Cleanup on error with improved logging
         import traceback
         error_details = traceback.format_exc()
-        print(f"Error processing chunk: {error_details}")
+        logger.error(f"Error processing chunk for session {session_id}: {error_details}")
         
-        if 'tmp_webm_path' in locals() and os.path.exists(tmp_webm_path):
-            os.unlink(tmp_webm_path)
-        if 'tmp_wav_path' in locals() and os.path.exists(tmp_wav_path):
-            os.unlink(tmp_wav_path)
+        # Cleanup any temp files that were created
+        temp_files_to_cleanup = []
+        if 'tmp_webm_path' in locals() and tmp_webm_path and os.path.exists(tmp_webm_path):
+            temp_files_to_cleanup.append(tmp_webm_path)
+        if 'tmp_wav_path' in locals() and tmp_wav_path and os.path.exists(tmp_wav_path):
+            temp_files_to_cleanup.append(tmp_wav_path)
+        if 'audio_path' in locals() and audio_path and audio_path != tmp_wav_path and os.path.exists(audio_path):
+            temp_files_to_cleanup.append(audio_path)
+        
+        for temp_file in temp_files_to_cleanup:
+            try:
+                os.unlink(temp_file)
+            except OSError as cleanup_error:
+                logger.warning(f"Failed to cleanup temp file {temp_file} on error: {cleanup_error}")
         
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
@@ -358,27 +614,43 @@ async def process_chunk(
 @app.post("/api/v1/sessions/{session_id}/finalize")
 async def finalize_session(session_id: str, request_obj=Depends(verify_api_key)):
     """Finalize a session and return complete transcript."""
-    session = get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    final_transcript = session.get("transcript", "")
-    
-    # Optionally delete session or mark as completed
-    session["status"] = "completed"
-    session["completed_at"] = datetime.utcnow().isoformat()
-    save_session(session_id, session)
-    
-    return {
-        "session_id": session_id,
-        "transcript": final_transcript,
-        "is_final": True,
-        "chunk_count": session.get("chunk_count", 0),
-    }
+    try:
+        session = get_session(session_id)
+        if not session:
+            logger.warning(f"Session not found: {session_id}")
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Ensure session is a dict, not a coroutine
+        if not isinstance(session, dict):
+            logger.error(f"Invalid session type: {type(session)} for session {session_id}")
+            raise HTTPException(status_code=500, detail="Invalid session data")
+        
+        final_transcript = session.get("transcript", "")
+        
+        # Optionally delete session or mark as completed
+        session["status"] = "completed"
+        session["completed_at"] = datetime.now(timezone.utc).isoformat()
+        save_session(session_id, session)
+        
+        return {
+            "session_id": session_id,
+            "transcript": final_transcript,
+            "is_final": True,
+            "chunk_count": session.get("chunk_count", 0),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error finalizing session {session_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to finalize transcription: {str(e)}")
 
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    host = os.getenv("HOST", "0.0.0.0")
+    logger.info(f"Starting Whisper service on {host}:{port}")
+    logger.info(f"Model: {WHISPER_MODEL}, Device: {WHISPER_DEVICE}")
+    logger.info(f"Redis: {'Connected' if redis_client else 'Using in-memory storage'}")
+    uvicorn.run(app, host=host, port=port, log_level="info")
 

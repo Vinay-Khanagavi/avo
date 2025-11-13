@@ -42,8 +42,9 @@ export async function createTranscriptionSession(
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Unknown error" }))
-    throw new Error(error.error || `Failed to create session: ${response.statusText}`)
+    const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+    const errorMessage = errorData.error || errorData.detail || `Failed to create session: ${response.statusText}`
+    throw new Error(errorMessage)
   }
 
   const data = await response.json()
@@ -72,8 +73,9 @@ export async function sendChunk(
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Unknown error" }))
-    throw new Error(error.error || `Failed to send chunk: ${response.statusText}`)
+    const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+    const errorMessage = errorData.error || errorData.detail || `Failed to send chunk: ${response.statusText}`
+    throw new Error(errorMessage)
   }
 
   return await response.json()
@@ -150,8 +152,9 @@ export async function finalizeSession(
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: "Unknown error" }))
-    throw new Error(error.error || `Failed to finalize session: ${response.statusText}`)
+    const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+    const errorMessage = errorData.error || errorData.detail || `Failed to finalize session: ${response.statusText}`
+    throw new Error(errorMessage)
   }
 
   return await response.json()

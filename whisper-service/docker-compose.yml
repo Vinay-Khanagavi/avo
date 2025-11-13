@@ -23,7 +23,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s  # Give time for model to load
+      start_period: 90s  # Give time for model to load (can take 30-60s on CPU)
 
   redis:
     image: redis:7-alpine

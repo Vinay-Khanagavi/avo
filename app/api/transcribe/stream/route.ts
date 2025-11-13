@@ -40,25 +40,37 @@ export async function POST(request: NextRequest) {
           chunkHeaders["X-API-Key"] = WHISPER_API_KEY
         }
 
-        const response = await fetch(
-          `${WHISPER_SERVICE_URL}/api/v1/sessions/${sessionId}/chunks`,
-          {
-            method: "POST",
-            headers: chunkHeaders,
-            body: chunkFormData,
-          }
-        )
-
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({ detail: "Unknown error" }))
-          return NextResponse.json(
-            { error: error.detail || "Failed to process chunk" },
-            { status: response.status }
+        try {
+          const response = await fetch(
+            `${WHISPER_SERVICE_URL}/api/v1/sessions/${sessionId}/chunks`,
+            {
+              method: "POST",
+              headers: chunkHeaders,
+              body: chunkFormData,
+            }
           )
-        }
 
-        const data = await response.json()
-        return NextResponse.json(data)
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: "Unknown error" }))
+            return NextResponse.json(
+              { error: error.detail || "Failed to process chunk" },
+              { status: response.status }
+            )
+          }
+
+          const data = await response.json()
+          return NextResponse.json(data)
+        } catch (error: any) {
+          if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
+            return NextResponse.json(
+              { 
+                error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
+              },
+              { status: 503 }
+            )
+          }
+          throw error
+        }
       }
     }
 
@@ -76,56 +88,80 @@ export async function POST(request: NextRequest) {
 
     // Create session
     if (action === "create") {
-      const response = await fetch(`${WHISPER_SERVICE_URL}/api/v1/sessions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ prompt: body.prompt }),
-      })
+      try {
+        const response = await fetch(`${WHISPER_SERVICE_URL}/api/v1/sessions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ prompt: body.prompt }),
+        })
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: "Unknown error" }))
-        return NextResponse.json(
-          { error: error.detail || "Failed to create session" },
-          { status: response.status }
-        )
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ detail: "Unknown error" }))
+          return NextResponse.json(
+            { error: error.detail || "Failed to create session" },
+            { status: response.status }
+          )
+        }
+
+        const data = await response.json()
+        return NextResponse.json(data)
+      } catch (error: any) {
+        if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
+          return NextResponse.json(
+            { 
+              error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
+            },
+            { status: 503 }
+          )
+        }
+        throw error
       }
-
-      const data = await response.json()
-      return NextResponse.json(data)
     }
 
     // Finalize session
     if (action === "finalize" && sessionId) {
-      const response = await fetch(
-        `${WHISPER_SERVICE_URL}/api/v1/sessions/${sessionId}/finalize`,
-        {
-          method: "POST",
-          headers,
-        }
-      )
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: "Unknown error" }))
-        return NextResponse.json(
-          { error: error.detail || "Failed to finalize session" },
-          { status: response.status }
+      try {
+        const response = await fetch(
+          `${WHISPER_SERVICE_URL}/api/v1/sessions/${sessionId}/finalize`,
+          {
+            method: "POST",
+            headers,
+          }
         )
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ detail: "Unknown error" }))
+          return NextResponse.json(
+            { error: error.detail || "Failed to finalize session" },
+            { status: response.status }
+          )
+        }
+
+          const data = await response.json()
+
+        // Save final transcript to database
+        if (data.transcript?.trim()) {
+          const { prisma } = await import("@/lib/prisma")
+          await prisma.transcription.create({
+            data: {
+              text: data.transcript.trim(),
+              userId: session.user.id,
+            },
+          })
+        }
+
+        return NextResponse.json(data)
+      } catch (error: any) {
+        if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
+          return NextResponse.json(
+            { 
+              error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
+            },
+            { status: 503 }
+          )
+        }
+        throw error
       }
-
-      const data = await response.json()
-
-      // Save final transcript to database
-      if (data.transcript?.trim()) {
-        const { prisma } = await import("@/lib/prisma")
-        await prisma.transcription.create({
-          data: {
-            text: data.transcript.trim(),
-            userId: session.user.id,
-          },
-        })
-      }
-
-      return NextResponse.json(data)
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
