@@ -185,18 +185,18 @@ export async function transcribeAssemblyAIChunk(
     }
     
     // Check if new transcript is entirely contained in existing (duplicate)
-    if (normalizedExisting.includes(normalizedTranscript)) {
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: isFinal,
+      if (normalizedExisting.includes(normalizedTranscript)) {
+        return {
+          session_id: sessionId,
+          transcript: existingTranscript,
+          incremental: "",
+          is_final: isFinal,
       }
     }
     
     // Check if new transcript contains the entire existing transcript (legitimate continuation)
     if (normalizedTranscript.startsWith(normalizedExisting)) {
-      // Extract only the new part
+    // Extract only the new part
       const incremental = normalizedTranscript.slice(normalizedExisting.length).trim()
       if (incremental) {
         return {
@@ -207,13 +207,13 @@ export async function transcribeAssemblyAIChunk(
         }
       }
       // No new content, return existing
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: isFinal,
+        return {
+          session_id: sessionId,
+          transcript: existingTranscript,
+          incremental: "",
+          is_final: isFinal,
+        }
       }
-    }
     
     // Word-by-word comparison to find overlap and extract new content
     const existingWords = normalizedExisting.split(/\s+/).filter(w => w.length > 0)
@@ -232,10 +232,10 @@ export async function transcribeAssemblyAIChunk(
       
       if (normalizedSuffix === normalizedPrefix) {
         bestMatch = i
-        break
-      }
-    }
-    
+            break
+          }
+        }
+        
     // If we found a good match, extract only the new words
     if (bestMatch > 0 && bestMatch < newWords.length) {
       const incremental = newWords.slice(bestMatch).join(" ")
@@ -284,11 +284,11 @@ export async function transcribeAssemblyAIChunk(
       if (commonPrefixLength < newWords.length) {
         const incremental = newWords.slice(commonPrefixLength).join(" ")
         const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
-        
-        return {
-          session_id: sessionId,
-          transcript: mergedTranscript,
-          incremental,
+
+    return {
+      session_id: sessionId,
+      transcript: mergedTranscript,
+      incremental,
           is_final: isFinal,
         }
       }

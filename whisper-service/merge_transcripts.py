@@ -156,7 +156,7 @@ def merge_at_word_boundary(existing_text: str, new_text: str) -> str:
         existing_word_set = set(w.lower() for w in existing_words)
         new_word_set = set(w.lower() for w in new_words)
         overlap = len([w for w in new_word_set if w in existing_word_set])
-        
+    
         # If less than 30% overlap, treat as new content
         if len(new_word_set) > 0 and overlap / len(new_word_set) < 0.3:
             return new_normalized
