@@ -3,6 +3,7 @@
 import { LandingHero, FeatureHighlights } from "./landing-hero"
 import { MouseTracker } from "./mouse-tracker"
 import { GrainOverlay } from "./grain-overlay"
+import { ArchitectureSection } from "./architecture-section"
 
 export function LandingPage() {
   return (
@@ -19,6 +20,7 @@ export function LandingPage() {
       {/* Content */}
       <div className="relative z-20">
         <LandingHero />
+        <ArchitectureSection />
         <FeatureHighlights />
         
         {/* Footer CTA */}
