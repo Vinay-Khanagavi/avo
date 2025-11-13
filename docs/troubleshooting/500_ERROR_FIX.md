@@ -8,6 +8,8 @@ This document covers fixes for 500 Internal Server Errors, including signup erro
    - Added proper connection error handling
    - Added graceful disconnection on process termination
    - Better error logging for database connection issues
+   - Handles `PrismaClientInitializationError` specifically
+   - Added `checkDatabaseConnection()` helper function
 
 ### 2. **Enhanced Authentication Error Handling** (`lib/auth.ts`)
    - Wrapped database queries in try-catch blocks
@@ -15,6 +17,12 @@ This document covers fixes for 500 Internal Server Errors, including signup erro
    - Returns null instead of throwing errors (NextAuth best practice)
 
 ### 3. **Comprehensive API Route Error Handling**
+   - **Signup API** (`app/api/signup/route.ts`):
+     - Handles `PrismaClientInitializationError` (database unreachable)
+     - Handles connection errors with specific error messages
+     - Returns 503 Service Unavailable instead of 500 for connection issues
+     - Provides helpful error messages to users
+   
    - **Dictionary API** (`app/api/dictionary/route.ts`):
      - Handles Prisma connection errors (P1000, P1001)
      - Handles duplicate entry errors (P2002)
@@ -32,8 +40,9 @@ This document covers fixes for 500 Internal Server Errors, including signup erro
 
 ### 4. **Health Check Endpoint** (`app/api/health/route.ts`)
    - New endpoint to diagnose production issues
-   - Tests database connectivity
-   - Returns service status and error details
+   - Tests database connectivity with 5-second timeout
+   - Handles `PrismaClientInitializationError` specifically
+   - Returns detailed error messages for connection issues
    - Accessible at: `https://your-domain.com/api/health`
 
 ## Common Causes of 500 Errors
@@ -41,13 +50,43 @@ This document covers fixes for 500 Internal Server Errors, including signup erro
 ### 1. **Database Connection Issues** (Most Common)
    **Symptoms:**
    - 500 errors on API routes
+   - `PrismaClientInitializationError` in logs
+   - Error message: "Can't reach database server at..."
    - Prisma error codes: P1000, P1001
    
+   **Common Causes:**
+   - Database service is stopped or paused in Railway
+   - Database URL is incorrect or expired
+   - Network connectivity issues
+   - Database server is overloaded or timing out
+   
    **Solutions:**
-   - Check `DATABASE_URL` environment variable in Railway
-   - Verify database service is running
-   - Check Railway logs for connection errors
-   - Use `/api/health` endpoint to test connectivity
+   1. **Check Database Service Status**:
+      - Go to Railway Dashboard → PostgreSQL Service
+      - Verify the service is running (not paused)
+      - Check service logs for any errors
+   
+   2. **Verify DATABASE_URL**:
+      - Go to Railway Dashboard → PostgreSQL Service → Variables
+      - Copy the `DATABASE_URL` value
+      - Go to Railway Dashboard → Your Next.js Service → Variables
+      - Ensure `DATABASE_URL` matches exactly
+      - Redeploy after updating
+   
+   3. **Test Database Connection**:
+      - Use `/api/health` endpoint: `curl https://your-domain.com/api/health`
+      - Check Railway logs for connection errors
+      - Try connecting via Railway shell: `railway shell` then `psql $DATABASE_URL`
+   
+   4. **Restart Services**:
+      - Restart PostgreSQL service in Railway
+      - Redeploy your Next.js service
+      - Wait a few minutes for services to stabilize
+   
+   5. **Check Connection Limits**:
+      - Railway free tier has connection limits
+      - Ensure you're not exceeding connection pool size
+      - Consider upgrading if needed
 
 ### 2. **Missing Database Migrations** (Common for Signup Errors)
    **Symptoms:**

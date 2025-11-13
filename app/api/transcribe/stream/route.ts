@@ -142,13 +142,13 @@ export async function POST(request: NextRequest) {
         // Save final transcript to database
         if (data.transcript?.trim()) {
           try {
-            const { prisma } = await import("@/lib/prisma")
-            await prisma.transcription.create({
-              data: {
-                text: data.transcript.trim(),
-                userId: session.user.id,
-              },
-            })
+          const { prisma } = await import("@/lib/prisma")
+          await prisma.transcription.create({
+            data: {
+              text: data.transcript.trim(),
+              userId: session.user.id,
+            },
+          })
           } catch (dbError: any) {
             // Log database error but don't fail the request
             console.error("Failed to save transcription to database:", dbError)

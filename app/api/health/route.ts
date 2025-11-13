@@ -20,16 +20,29 @@ export async function GET() {
   }
 
   try {
-    // Test database connection
-    await prisma.$queryRaw`SELECT 1`
+    // Test database connection with timeout
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Database connection timeout")), 5000)
+      )
+    ])
     health.database = "connected"
   } catch (error: any) {
     health.status = "unhealthy"
     health.database = "error"
-    health.databaseError = error.message || "Unknown database error"
     
-    if (error.code === "P1001" || error.code === "P1000") {
+    // Handle PrismaClientInitializationError
+    if (error?.name === 'PrismaClientInitializationError' || 
+        error?.constructor?.name === 'PrismaClientInitializationError' ||
+        error?.message?.includes("Can't reach database server")) {
+      health.databaseError = `Database server unreachable: ${error.message || 'Connection failed'}`
+    } else if (error.code === "P1001" || error.code === "P1000") {
       health.databaseError = "Database connection failed. Check DATABASE_URL."
+    } else if (error.message === "Database connection timeout") {
+      health.databaseError = "Database connection timeout. Server may be slow or unreachable."
+    } else {
+      health.databaseError = error.message || "Unknown database error"
     }
   }
 

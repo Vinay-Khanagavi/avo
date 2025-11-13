@@ -41,6 +41,13 @@ export const authOptions: NextAuthOptions = {
           }
         } catch (error: any) {
           console.error("Auth error:", error)
+          
+          // Log connection errors specifically
+          if (error?.name === 'PrismaClientInitializationError' || 
+              error?.message?.includes("Can't reach database server")) {
+            console.error("Database connection error during auth:", error.message)
+          }
+          
           // Don't expose database errors to users
           return null
         }

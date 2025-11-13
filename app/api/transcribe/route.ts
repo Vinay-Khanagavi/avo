@@ -59,12 +59,12 @@ export async function POST(request: NextRequest) {
     // Save transcription to database
     if (mockTranscript.trim()) {
       try {
-        await prisma.transcription.create({
-          data: {
-            text: mockTranscript.trim(),
-            userId: session.user.id,
-          },
-        })
+      await prisma.transcription.create({
+        data: {
+          text: mockTranscript.trim(),
+          userId: session.user.id,
+        },
+      })
       } catch (dbError: any) {
         // Log database error but don't fail the request
         console.error("Failed to save transcription to database:", dbError)
