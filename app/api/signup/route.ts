@@ -55,9 +55,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Log detailed error for debugging
     console.error("Signup error:", error)
+    
+    // Check for Prisma errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code?: string; message?: string }
+      if (prismaError.code === 'P2002') {
+        return NextResponse.json(
+          { error: "User with this email already exists" },
+          { status: 400 }
+        )
+      }
+      if (prismaError.code === 'P1001' || prismaError.code === 'P1000') {
+        console.error("Database connection error:", prismaError.message)
+        return NextResponse.json(
+          { error: "Database connection failed. Please check DATABASE_URL." },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Return more detailed error in development, generic in production
+    const errorMessage = process.env.NODE_ENV === 'production' 
+      ? "Internal server error" 
+      : error instanceof Error ? error.message : "Unknown error occurred"
+    
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: errorMessage },
       { status: 500 }
     )
   }
