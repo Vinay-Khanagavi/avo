@@ -55,7 +55,7 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
     return (
       <>
         <Select value={value} onValueChange={handleValueChange} disabled={disabled}>
-          <SelectTrigger className="w-auto min-w-fit border-none shadow-none gap-1 px-2 py-1.5 focus-visible:ring-0 focus-visible:ring-offset-0">
+          <SelectTrigger className="w-auto min-w-fit border-none shadow-none gap-1 px-2 py-1.5 focus-visible:ring-0 focus-visible:ring-offset-0 text-lg font-semibold">
             <SelectValue>{getDisplayValue()}</SelectValue>
           </SelectTrigger>
           <SelectContent>
