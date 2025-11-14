@@ -116,14 +116,14 @@ export function LandingHero() {
           >
             <Link href="/signup" className="relative z-100">Get Started</Link>
           </Button>
-          <Button
+          {/* <Button
             asChild
             variant="outline"
             size="lg"
             className="text-sm sm:text-base px-6 sm:px-8 md:px-10 py-4 sm:py-6 font-sans font-medium rounded-full hover:bg-background hover:text-foreground relative z-100 signin-mobile-hidden"
           >
             <Link href="/login" className="relative z-100">Sign In</Link>
-          </Button>
+          </Button> */}
         </div>
       </div>
     </div>
