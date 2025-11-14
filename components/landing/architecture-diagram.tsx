@@ -221,17 +221,42 @@ function FlowContent() {
   useEffect(() => {
     // Fit view after nodes are rendered to ensure proper layout
     const timer = setTimeout(() => {
-      fitView({ 
-        padding: 0.3, 
-        duration: 500,
+      fitView({
+        padding: 0.6,
+        duration: 600,
         includeHiddenNodes: false,
-        minZoom: 0.5,
-        maxZoom: 1.2
+        minZoom: 0.25,
+        maxZoom: 1.2,
       })
     }, 150)
 
     return () => clearTimeout(timer)
-  }, [fitView])
+  }, [fitView]) // Ensure fitView is called on changes
+
+  useEffect(() => {
+    // Re-fit view on resize/orientation changes so React Flow scales for mobile
+    let resizeTimer: any = null
+    const handle = () => {
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        try {
+          // use a slightly larger padding on resize so nodes don't touch rounded container
+          fitView({ padding: 0.5, duration: 350, minZoom: 0.25 })
+        } catch (e) {
+          // ignore if instance not ready
+        }
+      }, 180)
+    }
+
+    window.addEventListener("resize", handle)
+    window.addEventListener("orientationchange", handle)
+
+    return () => {
+      window.removeEventListener("resize", handle)
+      window.removeEventListener("orientationchange", handle)
+      if (resizeTimer) clearTimeout(resizeTimer)
+    }
+  }, [fitView]) // Ensure fitView is called on resize/orientation changes
 
   return null
 }
@@ -246,20 +271,23 @@ export function ArchitectureDiagram() {
   )
 
   const onInit = useCallback((reactFlowInstance: any) => {
-    // Fit view on initialization
+    // Fit view on initialization (use higher padding so nodes aren't flush to edges)
     setTimeout(() => {
-      reactFlowInstance.fitView({ 
-        padding: 0.3, 
-        duration: 500,
-        includeHiddenNodes: false 
+      reactFlowInstance.fitView({
+        padding: 0.6,
+        duration: 600,
+        includeHiddenNodes: false,
+        minZoom: 0.25,
       })
-    }, 100)
+    }, 250)
   }, [])
 
   const proOptions = { hideAttribution: true }
 
   return (
-    <div className="w-full h-[500px] md:h-[600px] relative">
+    // Use viewport-based height on small screens so the diagram remains visible
+    // Add horizontal padding to avoid node clipping against the rounded container
+    <div className="w-full h-[56vh] sm:h-[64vh] md:h-[600px] relative overflow-visible px-4 sm:px-6 md:px-12">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -269,8 +297,8 @@ export function ArchitectureDiagram() {
         onInit={onInit}
         nodeTypes={nodeTypes}
         proOptions={proOptions}
-        fitView
-        fitViewOptions={{ padding: 0.3, duration: 500 }}
+  fitView
+  fitViewOptions={{ padding: 0.6, duration: 600, minZoom: 0.25 }}
         className="bg-transparent"
         nodesDraggable={true}
         nodesConnectable={false}

@@ -167,7 +167,7 @@ export function MainSection({
   }, [isInteractive, isRecording, isProcessing, onStart, onStop])
 
   return (
-    <section ref={sectionRef} className="w-full pt-4 md:pt-20 px-0 md:px-4 relative pb-10 overflow-hidden">
+    <section ref={sectionRef} className="w-full pt-4 md:pt-20 px-0 md:px-4 relative pb-10 overflow-hidden dictation-main-offset">
       <div className="max-w-4xl mx-auto">
         {/* Tab Buttons */}
         <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-8 md:mb-12 px-4 md:px-0">

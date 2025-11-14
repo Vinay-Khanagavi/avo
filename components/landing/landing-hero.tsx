@@ -112,7 +112,7 @@ export function LandingHero() {
           <Button
             asChild
             size="lg"
-            className="text-sm sm:text-base px-6 sm:px-8 md:px-10 py-4 sm:py-6 font-sans font-semibold bg-black text-white rounded-full hover:bg-black hover:scale-110 transition-all duration-300 ease-out relative z-100"
+            className="text-sm sm:text-base px-6 sm:px-8 md:px-10 py-4 sm:py-6 font-sans font-semibold bg-black text-white rounded-full hover:bg-black hover:scale-110 transition-all duration-300 ease-out relative z-100 get-started-mobile-offset"
           >
             <Link href="/signup" className="relative z-100">Get Started</Link>
           </Button>

@@ -54,7 +54,7 @@ function AVOLogo({ collapsed }: { collapsed: boolean }) {
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { state } = useSidebar()
+  const { state, setOpenMobile } = useSidebar()
   const isCollapsed = state === "collapsed"
 
   return (
@@ -78,26 +78,36 @@ export function Sidebar() {
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname === item.href
-          
+
           return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      tooltip={item.label}
-                      className={cn(
-                        isActive && "bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-700",
-                        !isActive && "hover:bg-gray-200/70 dark:hover:bg-gray-700/60",
-                        "focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none",
-                        !isActive && "active:bg-gray-200/70 dark:active:bg-gray-700/60"
-                      )}
-                    >
-                      <Link href={item.href}>
-                        <Icon />
-                        <span>{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+            <SidebarMenuItem key={item.href}>
+              <SidebarMenuButton
+                asChild
+                isActive={isActive}
+                tooltip={item.label}
+                className={cn(
+                  isActive && "bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-700",
+                  !isActive && "hover:bg-gray-200/70 dark:hover:bg-gray-700/60",
+                  "focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none",
+                  !isActive && "active:bg-gray-200/70 dark:active:bg-gray-700/60"
+                )}
+              >
+                <Link
+                  href={item.href}
+                  onClick={() => {
+                    // Close mobile sidebar when a nav link is clicked so the menu doesn't remain open on navigation
+                    try {
+                      setOpenMobile(false)
+                    } catch (e) {
+                      // ignore
+                    }
+                  }}
+                >
+                  <Icon />
+                  <span>{item.label}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           )
         })}
             </SidebarMenu>

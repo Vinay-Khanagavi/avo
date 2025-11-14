@@ -62,8 +62,8 @@ export function LandingHeader() {
       <div
         className={`absolute inset-0 transition-all duration-300 ${
           highlightHeader
-            ? "backdrop-blur-md bg-black/20 border-white/10 shadow-lg shadow-black/5"
-            : "bg-transparent"
+            ? "backdrop-blur-md bg-black/20 border-b border-white/10 shadow-lg shadow-black/5"
+            : "bg-transparent border-b-0"
         }`}
       ></div>
       <div className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
@@ -86,7 +86,7 @@ export function LandingHeader() {
           <div className="flex items-center gap-3 sm:gap-6">
             <Button
               onClick={scrollToArchitecture}
-              className={`text-sm sm:text-base font-medium rounded-full px-3 sm:px-6 py-2 font-sans hover:scale-110 transition-all duration-300 ease-out ${
+              className={`text-sm sm:text-base font-medium rounded-full px-3 sm:px-6 py-2 font-sans hover:scale-110 transition-all duration-300 ease-out btn-arch-small ${
                 highlightHeader
                   ? "text-white bg-white/20 hover:bg-white/30"
                   : "text-black bg-gray-100 hover:bg-gray-200"
