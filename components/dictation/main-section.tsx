@@ -89,6 +89,7 @@ export function MainSection({
   const [activeTab, setActiveTab] = useState<TabType>("prompt")
   const contentRef = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLElement>(null)
+  const gradientRef = useRef<HTMLDivElement>(null)
   const isInteractive = !!onStart && !!onStop && !!onChunk
 
   const tabs = [
@@ -116,6 +117,22 @@ export function MainSection({
       setTranscript("")
     }
   }, [activeTab, isInteractive, setTranscript])
+
+  // Animate gradient background on recording state change
+  useEffect(() => {
+    if (gradientRef.current) {
+      if (isRecording) {
+        gsap.fromTo(gradientRef.current, 
+          { opacity: 0 }, 
+          { opacity: 1, duration: 1.2, ease: "power2.out" }
+        )
+      } else {
+        gsap.to(gradientRef.current, 
+          { opacity: 0, duration: 0.3, ease: "power2.in" }
+        )
+      }
+    }
+  }, [isRecording])
 
   // Spacebar keyboard handler - use ref to persist across renders
   const isSpacebarPressedRef = useRef(false)
@@ -175,9 +192,11 @@ export function MainSection({
       {/* Gradient background for recording, covers only main content, not sidebar */}
       {isRecording && (
         <div
-          className="pointer-events-none fixed inset-0 z-30 animate-gradient-bg"
+          ref={gradientRef}
+          className="pointer-events-none fixed inset-0 z-30"
           style={{
-            background: "radial-gradient(ellipse 120% 80% at 60% 60%, #ffe5d9 0%, #ffd4b3 40%, #e6e6fa 70%, #b0c4de 100%)"
+            background: "radial-gradient(ellipse 120% 80% at 60% 60%, #ffe5d9 0%, #ffd4b3 40%, #e6e6fa 70%, #b0c4de 100%)",
+            opacity: 0
           }}
         />
       )}

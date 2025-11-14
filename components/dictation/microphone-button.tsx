@@ -117,7 +117,7 @@ export function MicrophoneButton({
       } : handleClick}
       disabled={disabled || hasPermission === null || hasPermission === false}
       size="lg"
-      className={`w-full max-w-xs rounded-xl text-white hover:bg-black hover:opacity-100 ${
+      className={`w-full max-w-xs rounded-xl text-white hover:bg-black hover:opacity-100 outline-none ${
         isRecording
           ? "bg-destructive hover:bg-destructive"
           : hasPermission === false
