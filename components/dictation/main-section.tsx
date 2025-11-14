@@ -126,7 +126,15 @@ export function MainSection({
           { opacity: 0 }, 
           { opacity: 1, duration: 1.2, ease: "power2.out" }
         )
+        gsap.to(gradientRef.current, {
+          backgroundPosition: "200% 200%",
+          duration: 20,
+          ease: "none",
+          repeat: -1,
+          yoyo: true
+        })
       } else {
+        gsap.killTweensOf(gradientRef.current)
         gsap.to(gradientRef.current, 
           { opacity: 0, duration: 0.3, ease: "power2.in" }
         )
@@ -196,6 +204,8 @@ export function MainSection({
           className="pointer-events-none fixed inset-0 z-30"
           style={{
             background: "radial-gradient(ellipse 120% 80% at 60% 60%, #ffe5d9 0%, #ffd4b3 40%, #e6e6fa 70%, #b0c4de 100%)",
+            backgroundSize: "200% 200%",
+            backgroundPosition: "0% 0%",
             opacity: 0
           }}
         />
