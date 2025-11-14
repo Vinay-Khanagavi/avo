@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Mic, MicOff, Loader2 } from "lucide-react"
 import { createMediaRecorder, createAudioSlicer } from "@/lib/audio-processor"
 import { playRecordingStartSound, playRecordingEndSound } from "@/lib/audio-sounds"
-import { Snackbar, useSnackbar } from "@/components/ui/snackbar"
 
 interface MicrophoneButtonProps {
   onStart: () => void
@@ -27,8 +26,6 @@ export function MicrophoneButton({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const stopRecordingRef = useRef<(() => void) | null>(null)
-  const { snackbar, showSnackbar, hideSnackbar } = useSnackbar()
-  const hasShownPermissionError = useRef(false)
 
   useEffect(() => {
     // Check microphone permission on mount
@@ -40,10 +37,6 @@ export function MicrophoneButton({
       .catch(() => {
         setHasPermission(false)
         setError("Microphone access denied. Please enable microphone permissions.")
-        if (!hasShownPermissionError.current) {
-          showSnackbar("You need to turn on your microphone to start recording", "error")
-          hasShownPermissionError.current = true
-        }
       })
 
     // Cleanup on unmount
