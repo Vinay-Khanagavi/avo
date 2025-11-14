@@ -119,10 +119,10 @@ export async function transcribeDeepgramChunk(
       }
     }
 
-    // Normalize transcript text
+    // --- AssemblyAI-style merging and duplicate logic ---
     const normalizedTranscript = (transcript || "").trim()
     const normalizedExisting = existingTranscript.trim()
-    
+
     // Skip empty transcripts (silence/no speech detected)
     if (!normalizedTranscript) {
       return {
@@ -132,7 +132,7 @@ export async function transcribeDeepgramChunk(
         is_final: true,
       }
     }
-    
+
     // If no existing transcript, return the new one
     if (!normalizedExisting) {
       return {
@@ -142,10 +142,9 @@ export async function transcribeDeepgramChunk(
         is_final: true,
       }
     }
-    
-    // Improved duplicate detection: Check if new transcript is identical or contained
+
+    // Exact duplicate
     if (normalizedExisting === normalizedTranscript) {
-      // Exact duplicate
       return {
         session_id: sessionId,
         transcript: existingTranscript,
@@ -153,8 +152,8 @@ export async function transcribeDeepgramChunk(
         is_final: true,
       }
     }
-    
-    // Check if new transcript is entirely contained in existing (duplicate)
+
+    // New transcript is entirely contained in existing (duplicate)
     if (normalizedExisting.includes(normalizedTranscript)) {
       return {
         session_id: sessionId,
@@ -163,10 +162,9 @@ export async function transcribeDeepgramChunk(
         is_final: true,
       }
     }
-    
-    // Check if new transcript contains the entire existing transcript (legitimate continuation)
+
+    // New transcript contains the entire existing transcript (legitimate continuation)
     if (normalizedTranscript.startsWith(normalizedExisting)) {
-    // Extract only the new part
       const incremental = normalizedTranscript.slice(normalizedExisting.length).trim()
       if (incremental) {
         return {
@@ -177,40 +175,35 @@ export async function transcribeDeepgramChunk(
         }
       }
       // No new content, return existing
-        return {
-          session_id: sessionId,
-          transcript: existingTranscript,
-          incremental: "",
+      return {
+        session_id: sessionId,
+        transcript: existingTranscript,
+        incremental: "",
         is_final: true,
       }
     }
-    
-    // Word-by-word comparison to find overlap and extract new content
+
+    // Word-by-word overlap detection
     const existingWords = normalizedExisting.split(/\s+/).filter(w => w.length > 0)
     const newWords = normalizedTranscript.split(/\s+/).filter(w => w.length > 0)
-    
+
     // Find the longest matching suffix of existing that matches a prefix of new
-    // This handles cases where transcription slightly changes previous words
     let bestMatch = 0
     for (let i = Math.min(existingWords.length, newWords.length); i > 0; i--) {
       const existingSuffix = existingWords.slice(-i).join(" ")
       const newPrefix = newWords.slice(0, i).join(" ")
-      
-      // Normalize for comparison (case-insensitive, ignore punctuation differences)
       const normalizedSuffix = existingSuffix.toLowerCase().replace(/[.,!?;:]/g, "")
       const normalizedPrefix = newPrefix.toLowerCase().replace(/[.,!?;:]/g, "")
-      
       if (normalizedSuffix === normalizedPrefix) {
         bestMatch = i
         break
       }
     }
-    
+
     // If we found a good match, extract only the new words
     if (bestMatch > 0 && bestMatch < newWords.length) {
       const incremental = newWords.slice(bestMatch).join(" ")
       const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
-      
       return {
         session_id: sessionId,
         transcript: mergedTranscript,
@@ -218,7 +211,7 @@ export async function transcribeDeepgramChunk(
         is_final: true,
       }
     }
-    
+
     // If new transcript is significantly longer, it might be a correction or new content
     // Only accept if it's at least 50% longer to avoid false positives
     if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
@@ -226,8 +219,6 @@ export async function transcribeDeepgramChunk(
       const existingWordSet = new Set(existingWords.map(w => w.toLowerCase()))
       const newWordSet = new Set(newWords.map(w => w.toLowerCase()))
       const overlap = [...newWordSet].filter(w => existingWordSet.has(w)).length
-      
-      // If less than 30% overlap, treat as new content
       if (overlap / newWordSet.size < 0.3) {
         return {
           session_id: sessionId,
@@ -237,7 +228,7 @@ export async function transcribeDeepgramChunk(
         }
       }
     }
-    
+
     // Try to extract new words by finding common prefix
     let commonPrefixLength = 0
     for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
@@ -247,12 +238,10 @@ export async function transcribeDeepgramChunk(
         break
       }
     }
-    
-    // If we found a common prefix and there are new words after it
+
     if (commonPrefixLength > 0 && commonPrefixLength < newWords.length) {
       const incremental = newWords.slice(commonPrefixLength).join(" ")
       const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
-      
       return {
         session_id: sessionId,
         transcript: mergedTranscript,
@@ -260,7 +249,7 @@ export async function transcribeDeepgramChunk(
         is_final: true,
       }
     }
-    
+
     // If new is significantly longer (50%+), treat as new content
     if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
       const mergedTranscript = `${normalizedExisting} ${normalizedTranscript}`.trim()
@@ -271,7 +260,7 @@ export async function transcribeDeepgramChunk(
         is_final: true,
       }
     }
-    
+
     // Fallback: return existing to prevent duplicates
     return {
       session_id: sessionId,

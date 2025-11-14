@@ -111,9 +111,10 @@ export async function transcribeGroqWhisperChunk(
     // Clean up common hallucinated phrases
     transcript = cleanHallucinatedContent(transcript)
     
+    // --- AssemblyAI-style merging and duplicate logic ---
     const normalizedTranscript = (transcript || "").trim()
     const normalizedExisting = existingTranscript.trim()
-    
+
     // Skip empty transcripts (silence/no speech detected)
     if (!normalizedTranscript) {
       return {
@@ -123,7 +124,7 @@ export async function transcribeGroqWhisperChunk(
         is_final: true,
       }
     }
-    
+
     // If no existing transcript, return the new one
     if (!normalizedExisting) {
       return {
@@ -133,10 +134,9 @@ export async function transcribeGroqWhisperChunk(
         is_final: true,
       }
     }
-    
-    // Improved duplicate detection with multiple strategies
-    const duplicateResult = detectAndHandleDuplicates(normalizedExisting, normalizedTranscript)
-    if (duplicateResult.isDuplicate) {
+
+    // Exact duplicate
+    if (normalizedExisting === normalizedTranscript) {
       return {
         session_id: sessionId,
         transcript: existingTranscript,
@@ -144,11 +144,21 @@ export async function transcribeGroqWhisperChunk(
         is_final: true,
       }
     }
-    
-    // Check if the new transcript is a continuation of the existing one
+
+    // New transcript is entirely contained in existing (duplicate)
+    if (normalizedExisting.includes(normalizedTranscript)) {
+      return {
+        session_id: sessionId,
+        transcript: existingTranscript,
+        incremental: "",
+        is_final: true,
+      }
+    }
+
+    // New transcript contains the entire existing transcript (legitimate continuation)
     if (normalizedTranscript.startsWith(normalizedExisting)) {
       const incremental = normalizedTranscript.slice(normalizedExisting.length).trim()
-      if (incremental && isLikelyNewContent(incremental, normalizedExisting)) {
+      if (incremental) {
         return {
           session_id: sessionId,
           transcript: normalizedTranscript,
@@ -156,7 +166,7 @@ export async function transcribeGroqWhisperChunk(
           is_final: true,
         }
       }
-      // No meaningful new content
+      // No new content, return existing
       return {
         session_id: sessionId,
         transcript: existingTranscript,
@@ -164,31 +174,86 @@ export async function transcribeGroqWhisperChunk(
         is_final: true,
       }
     }
-    
-    // Advanced overlap detection and merging
-    const mergeResult = mergeTranscriptsIntelligently(normalizedExisting, normalizedTranscript)
-    if (mergeResult.hasMeaningfulOverlap) {
+
+    // Word-by-word overlap detection
+  const existingWords = normalizedExisting.split(/\s+/).filter((w: string) => w.length > 0)
+  const newWords = normalizedTranscript.split(/\s+/).filter((w: string) => w.length > 0)
+
+    // Find the longest matching suffix of existing that matches a prefix of new
+    let bestMatch = 0
+    for (let i = Math.min(existingWords.length, newWords.length); i > 0; i--) {
+      const existingSuffix = existingWords.slice(-i).join(" ")
+      const newPrefix = newWords.slice(0, i).join(" ")
+      const normalizedSuffix = existingSuffix.toLowerCase().replace(/[.,!?;:]/g, "")
+      const normalizedPrefix = newPrefix.toLowerCase().replace(/[.,!?;:]/g, "")
+      if (normalizedSuffix === normalizedPrefix) {
+        bestMatch = i
+        break
+      }
+    }
+
+    // If we found a good match, extract only the new words
+    if (bestMatch > 0 && bestMatch < newWords.length) {
+      const incremental = newWords.slice(bestMatch).join(" ")
+      const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
       return {
         session_id: sessionId,
-        transcript: mergeResult.mergedTranscript,
-        incremental: mergeResult.incremental,
+        transcript: mergedTranscript,
+        incremental,
         is_final: true,
       }
     }
-    
-    // If we get here, the transcripts are too different - be conservative
-    // Only append if the new content is significantly different and likely valid
-    if (isLikelyNewContent(normalizedTranscript, normalizedExisting) && 
-        normalizedTranscript.length > normalizedExisting.length * 1.2) {
+
+    // If new transcript is significantly longer, it might be a correction or new content
+    // Only accept if it's at least 50% longer to avoid false positives
+    if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
+      // Check for any word overlap at all
+  const existingWordSet = new Set(existingWords.map((w: string) => w.toLowerCase()))
+  const newWordSet = new Set(newWords.map((w: string) => w.toLowerCase()))
+  const overlap = (Array.from(newWordSet) as string[]).filter((w: string) => existingWordSet.has(w)).length
+      if (overlap / newWordSet.size < 0.3) {
+        return {
+          session_id: sessionId,
+          transcript: normalizedTranscript,
+          incremental: normalizedTranscript,
+          is_final: true,
+        }
+      }
+    }
+
+    // Try to extract new words by finding common prefix
+    let commonPrefixLength = 0
+    for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
+      if (existingWords[i].toLowerCase() === newWords[i].toLowerCase()) {
+        commonPrefixLength = i + 1
+      } else {
+        break
+      }
+    }
+
+    if (commonPrefixLength > 0 && commonPrefixLength < newWords.length) {
+      const incremental = newWords.slice(commonPrefixLength).join(" ")
+      const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
       return {
         session_id: sessionId,
-        transcript: normalizedExisting + " " + normalizedTranscript,
+        transcript: mergedTranscript,
+        incremental,
+        is_final: true,
+      }
+    }
+
+    // If new is significantly longer (50%+), treat as new content
+    if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
+      const mergedTranscript = `${normalizedExisting} ${normalizedTranscript}`.trim()
+      return {
+        session_id: sessionId,
+        transcript: mergedTranscript,
         incremental: normalizedTranscript,
         is_final: true,
       }
     }
-    
-    // Default: keep the existing transcript
+
+    // Fallback: return existing to prevent duplicates
     return {
       session_id: sessionId,
       transcript: existingTranscript,
