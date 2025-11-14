@@ -57,8 +57,10 @@ export function Sidebar() {
   const { state, setOpenMobile } = useSidebar()
   const isCollapsed = state === "collapsed"
 
+  // Use offcanvas mode for mobile, icon for desktop
+  // The ShadcnSidebar component will handle mobile/desktop logic internally
   return (
-    <ShadcnSidebar collapsible="icon" variant="sidebar" className="z-50 relative">
+    <ShadcnSidebar collapsible="offcanvas" variant="sidebar" className="z-50">
       <SidebarHeader className="border-b">
         <div className="flex items-center justify-between p-2">
           <AVOLogo collapsed={isCollapsed} />
