@@ -24,6 +24,7 @@ interface Pagination {
 export function TranscriptionHistory() {
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [showSpinner, setShowSpinner] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
@@ -36,6 +37,9 @@ export function TranscriptionHistory() {
 
   const fetchTranscriptions = async (page = 1, search = "") => {
     setIsLoading(true)
+    setShowSpinner(false)
+    // Delay showing spinner to avoid flash for fast loads
+    const spinnerTimeout = setTimeout(() => setShowSpinner(true), 300)
     try {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -53,6 +57,8 @@ export function TranscriptionHistory() {
       console.error("Error fetching transcriptions:", error)
     } finally {
       setIsLoading(false)
+      clearTimeout(spinnerTimeout)
+      setShowSpinner(false)
     }
   }
 
@@ -60,7 +66,6 @@ export function TranscriptionHistory() {
     const timeoutId = setTimeout(() => {
       fetchTranscriptions(1, searchQuery)
     }, 300)
-
     return () => clearTimeout(timeoutId)
   }, [searchQuery])
 
@@ -109,7 +114,7 @@ export function TranscriptionHistory() {
         />
       </div>
 
-      {isLoading ? (
+      {isLoading && showSpinner ? (
         <div className="flex justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
