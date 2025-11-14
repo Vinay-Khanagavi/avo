@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { RecordingProvider } from "@/contexts/recording-context"
 import { LayoutContent } from "@/components/layout/layout-content"
+import { MobileHeader } from "@/components/layout/mobile-header"
 
 export default async function DashboardLayout({
   children,
@@ -22,9 +23,10 @@ export default async function DashboardLayout({
       <SidebarProvider defaultOpen={true}>
         <Sidebar />
         <SidebarInset>
-        <LayoutContent>
-          {children}
-        </LayoutContent>
+          <MobileHeader />
+          <LayoutContent>
+            {children}
+          </LayoutContent>
         </SidebarInset>
       </SidebarProvider>
     </RecordingProvider>

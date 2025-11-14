@@ -167,16 +167,16 @@ export function MainSection({
   }, [isInteractive, isRecording, isProcessing, onStart, onStop])
 
   return (
-    <section ref={sectionRef} className="w-full pt-20 px-4 relative pb-10 overflow-hidden">
+    <section ref={sectionRef} className="w-full pt-4 md:pt-20 px-0 md:px-4 relative pb-10 overflow-hidden">
       <div className="max-w-4xl mx-auto">
         {/* Tab Buttons */}
-        <div className="flex flex-wrap gap-3 justify-center mb-12">
+        <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-8 md:mb-12 px-4 md:px-0">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`
-                px-6 py-3 rounded-lg font-sans font-semibold text-sm md:text-base
+                px-3 md:px-6 py-2 md:py-3 rounded-lg font-sans font-semibold text-xs md:text-sm md:text-base
                 transition-all duration-300 ease-out relative
                 ${
                   activeTab === tab.id
@@ -194,19 +194,19 @@ export function MainSection({
         </div>
 
         {/* Tab Content */}
-        <div ref={contentRef} className="space-y-8">
+        <div ref={contentRef} className="space-y-6 md:space-y-8 px-4 md:px-0">
           {/* Heading and Description */}
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-medium font-serif">
+          <div className="text-center space-y-3 md:space-y-4">
+            <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium font-serif">
               {currentContent.heading}
             </h2>
-            <p className="text-lg text-muted-foreground font-sans font-medium max-w-2xl mx-auto">
+            <p className="text-base md:text-lg text-muted-foreground font-sans font-medium max-w-2xl mx-auto">
               {currentContent.description}
             </p>
           </div>
 
           {/* Input Area */}
-          <div className="bg-white rounded-xl border border-gray-300 p-6 md:p-8 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-300 p-4 md:p-6 lg:p-8 shadow-sm">
             {currentContent.isEmail ? (
               <div className="space-y-6">
                 {/* Email Header */}

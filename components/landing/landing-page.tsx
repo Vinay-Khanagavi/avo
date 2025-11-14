@@ -32,23 +32,23 @@ export function LandingPage() {
         <FeatureHighlights />
         
         {/* Footer CTA */}
-        <div className="w-full max-w-4xl mx-auto px-4 py-20 text-center">
-          <h2 className="text-3xl md:text-4xl font-medium mb-4 font-serif">
+        <div className="w-full max-w-4xl mx-auto px-3 sm:px-4 py-12 sm:py-16 md:py-20 text-center">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-medium mb-3 sm:mb-4 font-serif">
             Ready to get started?
           </h2>
-          <p className="text-muted-foreground mb-8 font-sans font-medium">
+          <p className="text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8 font-sans font-medium max-w-lg mx-auto">
             Join thousands of users transforming their voice into text.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center relative z-100">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center relative z-100">
             <a
               href="/signup"
-              className="inline-flex items-center justify-center h-10 px-10 rounded-full bg-black text-white hover:bg-black hover:scale-110 transition-all duration-300 ease-out font-sans font-semibold relative z-100"
+              className="inline-flex items-center justify-center h-10 sm:h-12 px-6 sm:px-8 md:px-10 rounded-full bg-black text-white hover:bg-black hover:scale-110 transition-all duration-300 ease-out font-sans font-semibold relative z-100 text-sm sm:text-base"
             >
               Create Account
             </a>
             <a
               href="/login"
-              className="inline-flex items-center justify-center h-10 px-10 rounded-full border border-gray-300 bg-white text-black hover:bg-white hover:scale-110 transition-all duration-300 ease-out font-sans font-medium relative z-100"
+              className="inline-flex items-center justify-center h-10 sm:h-12 px-6 sm:px-8 md:px-10 rounded-full border border-gray-300 bg-white text-black hover:bg-white hover:scale-110 transition-all duration-300 ease-out font-sans font-medium relative z-100 text-sm sm:text-base"
             >
               Sign In
             </a>
@@ -56,10 +56,10 @@ export function LandingPage() {
         </div>
 
         {/* Footer */}
-        <footer className="w-full py-8 text-center relative z-40">
-          <div className="max-w-4xl mx-auto px-4">
-            <div className="flex items-center justify-center gap-3 text-muted-foreground">
-              <span className="text-sm font-sans">Built in 2025</span>
+        <footer className="w-full py-6 sm:py-8 text-center relative z-40">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 text-muted-foreground">
+              <span className="text-xs sm:text-sm font-sans">Built in 2025</span>
               <a
                 href="https://github.com/Vinay-Khanagavi/avo"
                 target="_blank"
@@ -67,7 +67,7 @@ export function LandingPage() {
                 aria-label="AVO GitHub repository"
                 className="hover:text-foreground transition-colors"
               >
-                <Github className="w-5 h-5" />
+                <Github className="w-4 h-4 sm:w-5 sm:h-5" />
               </a>
             </div>
           </div>

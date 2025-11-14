@@ -65,7 +65,7 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <main className="flex-1 overflow-y-auto relative">
+    <main className="flex-1 overflow-y-auto relative pt-0 md:pt-0">
       {/* Service Selector - Top Right Corner */}
       {isMounted && isDictationPage && (
         <div className="absolute top-4 right-4 z-20">
@@ -77,7 +77,9 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
           />
         </div>
       )}
-      {children}
+      <div className="px-4 py-6 md:px-6 md:py-8">
+        {children}
+      </div>
       {/* Waveform and Gradient - Show when recording */}
       {isMounted && isRecording && (
         <>

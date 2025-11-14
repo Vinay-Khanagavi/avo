@@ -102,26 +102,26 @@ export function DictionaryList() {
   )
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Dictionary</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">Dictionary</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage custom words to improve transcription accuracy
           </p>
         </div>
-        <Button onClick={handleAdd}>
+        <Button onClick={handleAdd} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           Add Word
         </Button>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         <Input
           placeholder="Search words..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="max-w-sm border-2 border-gray-300 dark:border-gray-600 focus-visible:border-gray-400 dark:focus-visible:border-gray-500"
+          className="w-full sm:max-w-sm border-2 border-gray-300 dark:border-gray-600 focus-visible:border-gray-400 dark:focus-visible:border-gray-500"
         />
 
         {isLoading ? (
@@ -130,22 +130,22 @@ export function DictionaryList() {
           </div>
         ) : filteredWords.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
+            <CardContent className="py-6 sm:py-8 text-center text-muted-foreground">
               {searchQuery
                 ? "No words found matching your search"
                 : "No words in dictionary. Add your first word to get started."}
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-3 sm:gap-4">
             {filteredWords.map((word) => (
               <Card key={word.id}>
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium">{word.word}</p>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm sm:text-base break-words">{word.word}</p>
                       {word.substitution && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs sm:text-sm text-muted-foreground break-words">
                           → {word.substitution}
                         </p>
                       )}

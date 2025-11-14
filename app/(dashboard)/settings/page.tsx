@@ -170,18 +170,18 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="space-y-6">
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Settings</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold">Settings</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Configure your transcription preferences and AI formatting options
             </p>
           </div>
-          <Button 
-            onClick={handleSave} 
-            className="h-11 px-6 shadow-sm bg-black text-white w-full sm:w-auto" 
+          <Button
+            onClick={handleSave}
+            className="h-11 px-4 sm:px-6 shadow-sm bg-black text-white w-full sm:w-auto"
             disabled={loading}
           >
             {loading ? (

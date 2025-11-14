@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Mic, BookOpen, Settings, LogOut, History, PanelLeft, PanelRight } from "lucide-react"
+import { Mic, BookOpen, Settings, LogOut, History, PanelLeft, PanelRight, Menu, X } from "lucide-react"
 import { signOut } from "next-auth/react"
 import { cn } from "@/lib/utils"
 import {
@@ -18,6 +18,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
 
 const navItems = [
   { href: "/dictation", label: "Dictation", icon: Mic },

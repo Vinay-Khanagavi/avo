@@ -85,10 +85,10 @@ export function TranscriptionHistory() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Transcription History</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl sm:text-3xl font-bold">Transcription History</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           View and manage your past transcriptions
         </p>
       </div>
@@ -97,7 +97,7 @@ export function TranscriptionHistory() {
         placeholder="Search transcriptions..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="max-w-sm border-2 border-gray-300 dark:border-gray-600 focus-visible:border-gray-400 dark:focus-visible:border-gray-500"
+        className="w-full sm:max-w-sm border-2 border-gray-300 dark:border-gray-600 focus-visible:border-gray-400 dark:focus-visible:border-gray-500"
       />
 
       {isLoading ? (
@@ -106,7 +106,7 @@ export function TranscriptionHistory() {
         </div>
       ) : transcriptions.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
+          <CardContent className="py-6 sm:py-8 text-center text-muted-foreground">
             {searchQuery
               ? "No transcriptions found matching your search"
               : "No transcriptions yet. Start dictating to see your history here."}
@@ -114,22 +114,22 @@ export function TranscriptionHistory() {
         </Card>
       ) : (
         <>
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {transcriptions.map((transcription) => (
               <Card key={transcription.id} className="group">
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start gap-4 relative">
-                    <div className="flex-1">
-                      <p className="text-sm text-muted-foreground mb-2">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-4 relative">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm text-muted-foreground mb-1 sm:mb-2">
                         {format(new Date(transcription.createdAt), "PPp")}
                       </p>
-                      <p className="whitespace-pre-wrap">{transcription.text}</p>
+                      <p className="whitespace-pre-wrap text-sm sm:text-base break-words">{transcription.text}</p>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleCopy(transcription.text, transcription.id)}
-                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity self-start sm:self-auto"
                     >
                       {copiedId === transcription.id ? (
                         <Check className="h-4 w-4 text-green-600" />
@@ -144,21 +144,23 @@ export function TranscriptionHistory() {
           </div>
 
           {pagination.totalPages > 1 && (
-            <div className="flex justify-center gap-2">
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-2 sm:gap-4">
               <Button
                 variant="outline"
                 onClick={() => handlePageChange(pagination.page - 1)}
                 disabled={pagination.page === 1}
+                className="w-full sm:w-auto"
               >
                 Previous
               </Button>
-              <span className="flex items-center px-4">
+              <span className="text-sm sm:text-base px-2 sm:px-4">
                 Page {pagination.page} of {pagination.totalPages}
               </span>
               <Button
                 variant="outline"
                 onClick={() => handlePageChange(pagination.page + 1)}
                 disabled={pagination.page >= pagination.totalPages}
+                className="w-full sm:w-auto"
               >
                 Next
               </Button>

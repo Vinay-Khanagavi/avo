@@ -158,8 +158,8 @@ export default function DictationPage() {
   )
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl overflow-hidden">
-      <MainSection 
+    <div className="w-full max-w-4xl mx-auto overflow-hidden">
+      <MainSection
         transcript={transcript}
         setTranscript={setTranscript}
         isRecording={isRecording}
