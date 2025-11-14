@@ -1,7 +1,3 @@
-/**
- * Client-side streaming utilities for Whisper transcription service
- */
-
 export interface TranscriptionSession {
   sessionId: string
   prompt?: string
@@ -26,13 +22,10 @@ const WHISPER_SERVICE_URL =
 
 const WHISPER_API_KEY = process.env.NEXT_PUBLIC_WHISPER_API_KEY || ""
 
-/**
- * Create a new transcription session
- * Uses Next.js API route as proxy
- */
+
 export async function createTranscriptionSession(
   prompt?: string,
-  service: "whisper" | "deepgram" | "assemblyai" = "whisper"
+  service: "whisper" | "deepgram" | "assemblyai" | "groq-whisper" = "whisper"
 ): Promise<TranscriptionSession> {
   const response = await fetch("/api/transcribe/stream", {
     method: "POST",
@@ -55,14 +48,10 @@ export async function createTranscriptionSession(
   }
 }
 
-/**
- * Send an audio chunk and get incremental transcript
- * Uses Next.js API route as proxy to avoid CORS issues
- */
 export async function sendChunk(
   sessionId: string,
   chunk: Blob,
-  service: "whisper" | "deepgram" | "assemblyai" = "whisper"
+  service: "whisper" | "deepgram" | "assemblyai" | "groq-whisper" = "whisper"
 ): Promise<ChunkResponse> {
   const formData = new FormData()
   formData.append("file", chunk, "chunk.webm")
@@ -102,7 +91,7 @@ export async function sendChunk(
 export async function sendChunkWithRetry(
   sessionId: string,
   chunk: Blob,
-  service: "whisper" | "deepgram" | "assemblyai" = "whisper",
+  service: "whisper" | "deepgram" | "assemblyai" | "groq-whisper" = "whisper",
   maxRetries: number = 3
 ): Promise<ChunkResponse> {
   let lastError: Error | null = null
@@ -158,7 +147,7 @@ export async function getSession(sessionId: string): Promise<SessionResponse> {
  */
 export async function finalizeSession(
   sessionId: string,
-  service: "whisper" | "deepgram" | "assemblyai" = "whisper"
+  service: "whisper" | "deepgram" | "assemblyai" | "groq-whisper" = "whisper"
 ): Promise<ChunkResponse> {
   const response = await fetch("/api/transcribe/stream", {
     method: "POST",

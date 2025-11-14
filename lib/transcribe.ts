@@ -36,9 +36,5 @@ export async function* streamTranscription(
   // Using Whisper streaming instead - see lib/whisper-stream.ts
   throw new Error("AWS Transcribe streaming is deprecated. Use Whisper streaming instead.")
   
-  /* Commented out deprecated AWS Transcribe implementation
-  const client = getTranscribeClient()
-  // ... rest of implementation
-  */
 }
 

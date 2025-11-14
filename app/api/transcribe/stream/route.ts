@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { 
-  createDeepgramSession, 
-  transcribeDeepgramChunk, 
-  finalizeDeepgramSession 
+import {
+  createDeepgramSession,
+  transcribeDeepgramChunk,
+  finalizeDeepgramSession
 } from "@/lib/deepgram-service"
-import { 
-  createAssemblyAISession, 
-  transcribeAssemblyAIChunk, 
-  finalizeAssemblyAISession 
+import {
+  createAssemblyAISession,
+  transcribeAssemblyAIChunk,
+  finalizeAssemblyAISession
 } from "@/lib/assemblyai-service"
-import { aiFormatTranscript } from "@/lib/ai-formatter"
-import { applyDictionaryReplacements } from "@/lib/dictionary-replace"
-import { getUserAISettings } from "@/lib/user-settings"
+import {
+  createGroqWhisperSession,
+  transcribeGroqWhisperChunk,
+  finalizeGroqWhisperSession
+} from "@/lib/groq-whisper-service"
+
 
 const WHISPER_SERVICE_URL = process.env.WHISPER_SERVICE_URL || "http://localhost:8000"
 const WHISPER_API_KEY = process.env.WHISPER_API_KEY || ""
@@ -69,42 +72,13 @@ export async function POST(request: NextRequest) {
               prompt
             )
 
-            // Apply AI formatting if available
-            let formattedTranscript = result.transcript
-            try {
-              const userSettings = await getUserAISettings()
-              if (userSettings.provider !== 'none') {
-                formattedTranscript = await aiFormatTranscript(result.transcript, {
-                  detectBulletPoints: userSettings.detectBulletPoints,
-                  refineGrammar: userSettings.refineGrammar,
-                  improvePunctuation: userSettings.improvePunctuation,
-                  improveCapitalization: userSettings.improveCapitalization,
-                  addFormatting: userSettings.addFormatting,
-                }, {
-                  provider: userSettings.provider,
-                  apiKey: userSettings.provider === 'groq' ? userSettings.groqApiKey : 
-                          userSettings.provider === 'openai' ? userSettings.openaiApiKey : undefined,
-                })
-              }
-            } catch (error) {
-              console.error("AI formatting failed, using raw transcript:", error)
-              // Continue with raw transcript if formatting fails
-            }
-
-            // Update result with formatted transcript
-            const finalResult = {
-              ...result,
-              transcript: formattedTranscript,
-              incremental: formattedTranscript.slice(existingTranscript.length),
-            }
-
-            // Update session storage
+            // Update session storage with raw transcript
             sessionStorage.set(sessionId, {
-              transcript: formattedTranscript,
+              transcript: result.transcript,
               service: "deepgram",
             })
 
-            return NextResponse.json(finalResult)
+            return NextResponse.json(result)
           } catch (error: any) {
             console.error("Deepgram transcription error:", error)
             return NextResponse.json(
@@ -126,46 +100,45 @@ export async function POST(request: NextRequest) {
               prompt
             )
 
-            // Apply AI formatting if available
-            let formattedTranscript = result.transcript
-            try {
-              const userSettings = await getUserAISettings()
-              if (userSettings.provider !== 'none') {
-                formattedTranscript = await aiFormatTranscript(result.transcript, {
-                  detectBulletPoints: userSettings.detectBulletPoints,
-                  refineGrammar: userSettings.refineGrammar,
-                  improvePunctuation: userSettings.improvePunctuation,
-                  improveCapitalization: userSettings.improveCapitalization,
-                  addFormatting: userSettings.addFormatting,
-                }, {
-                  provider: userSettings.provider,
-                  apiKey: userSettings.provider === 'groq' ? userSettings.groqApiKey : 
-                          userSettings.provider === 'openai' ? userSettings.openaiApiKey : undefined,
-                })
-              }
-            } catch (error) {
-              console.error("AI formatting failed, using raw transcript:", error)
-              // Continue with raw transcript if formatting fails
-            }
-
-            // Update result with formatted transcript
-            const finalResult = {
-              ...result,
-              transcript: formattedTranscript,
-              incremental: formattedTranscript.slice(existingTranscript.length),
-            }
-
-            // Update session storage
+            // Update session storage with raw transcript
             sessionStorage.set(sessionId, {
-              transcript: formattedTranscript,
+              transcript: result.transcript,
               service: "assemblyai",
             })
 
-            return NextResponse.json(finalResult)
+            return NextResponse.json(result)
           } catch (error: any) {
             console.error("AssemblyAI transcription error:", error)
             return NextResponse.json(
               { error: error.message || "AssemblyAI transcription failed" },
+              { status: 500 }
+            )
+          }
+        } else if (service === "groq-whisper") {
+          try {
+            const sessionData = sessionStorage.get(sessionId)
+            const existingTranscript = sessionData?.transcript || ""
+            const prompt = sessionData?.prompt
+
+            const result = await transcribeGroqWhisperChunk(
+              sessionId,
+              audioBuffer,
+              existingTranscript,
+              customApiKey || undefined,
+              prompt
+            )
+
+            // Update session storage with raw transcript
+            sessionStorage.set(sessionId, {
+              transcript: result.transcript,
+              service: "groq-whisper",
+            })
+
+            return NextResponse.json(result)
+          } catch (error: any) {
+            console.error("Groq Whisper transcription error:", error)
+            return NextResponse.json(
+              { error: error.message || "Groq Whisper transcription failed" },
               { status: 500 }
             )
           }
@@ -198,37 +171,6 @@ export async function POST(request: NextRequest) {
             }
 
             const data = await response.json()
-            
-            // Apply AI formatting if available (for Whisper service)
-            if (data.transcript) {
-              try {
-                const userSettings = await getUserAISettings()
-                if (userSettings.provider !== 'none') {
-                  const formattedTranscript = await aiFormatTranscript(data.transcript, {
-                    detectBulletPoints: userSettings.detectBulletPoints,
-                    refineGrammar: userSettings.refineGrammar,
-                    improvePunctuation: userSettings.improvePunctuation,
-                    improveCapitalization: userSettings.improveCapitalization,
-                    addFormatting: userSettings.addFormatting,
-                  }, {
-                    provider: userSettings.provider,
-                    apiKey: userSettings.provider === 'groq' ? userSettings.groqApiKey : 
-                            userSettings.provider === 'openai' ? userSettings.openaiApiKey : undefined,
-                  })
-                  
-                  // Update transcript with formatted version
-                  data.transcript = formattedTranscript
-                  if (data.incremental) {
-                    const existingTranscript = data.transcript.slice(0, -data.incremental.length) || ""
-                    data.incremental = formattedTranscript.slice(existingTranscript.length)
-                  }
-                }
-              } catch (error) {
-                console.error("AI formatting failed for Whisper, using raw transcript:", error)
-                // Continue with raw transcript if formatting fails
-              }
-            }
-            
             return NextResponse.json(data)
           } catch (error: any) {
             if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
@@ -288,6 +230,22 @@ export async function POST(request: NextRequest) {
           console.error("AssemblyAI session creation error:", error)
           return NextResponse.json(
             { error: error.message || "Failed to create AssemblyAI session" },
+            { status: 500 }
+          )
+        }
+      } else if (service === "groq-whisper") {
+        try {
+          const session = await createGroqWhisperSession(body.prompt)
+          sessionStorage.set(session.sessionId, {
+            transcript: "",
+            service: "groq-whisper",
+            prompt: body.prompt,
+          })
+          return NextResponse.json({ session_id: session.sessionId, status: "created" })
+        } catch (error: any) {
+          console.error("Groq Whisper session creation error:", error)
+          return NextResponse.json(
+            { error: error.message || "Failed to create Groq Whisper session" },
             { status: 500 }
           )
         }
@@ -396,6 +354,41 @@ export async function POST(request: NextRequest) {
           console.error("AssemblyAI finalize error:", error)
           return NextResponse.json(
             { error: error.message || "Failed to finalize AssemblyAI session" },
+            { status: 500 }
+          )
+        }
+      } else if (service === "groq-whisper") {
+        try {
+          const result = await finalizeGroqWhisperSession(sessionId)
+          const finalTranscript = sessionData?.transcript || ""
+
+          // Save final transcript to database
+          if (finalTranscript.trim()) {
+            try {
+              const { prisma } = await import("@/lib/prisma")
+              await prisma.transcription.create({
+                data: {
+                  text: finalTranscript.trim(),
+                  userId: session.user.id,
+                },
+              })
+            } catch (dbError: any) {
+              console.error("Failed to save transcription to database:", dbError)
+            }
+          }
+
+          // Clean up session
+          sessionStorage.delete(sessionId)
+
+          return NextResponse.json({
+            session_id: sessionId,
+            transcript: finalTranscript,
+            is_final: true,
+          })
+        } catch (error: any) {
+          console.error("Groq Whisper finalize error:", error)
+          return NextResponse.json(
+            { error: error.message || "Failed to finalize Groq Whisper session" },
             { status: 500 }
           )
         }

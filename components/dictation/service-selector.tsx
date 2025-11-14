@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus } from "lucide-react"
 import { ApiKeyDialog } from "./api-key-dialog"
 
-export type TranscriptionService = "whisper" | "deepgram" | "assemblyai"
+export type TranscriptionService = "whisper" | "deepgram" | "assemblyai" | "groq-whisper"
 
 interface ServiceSelectorProps {
   value: TranscriptionService
@@ -46,6 +46,7 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
       whisper: "Whisper (AWS)",
       deepgram: "Deepgram",
       assemblyai: "AssemblyAI",
+      "groq-whisper": "Groq Whisper",
     }
     return labels[value] || value
   }
@@ -63,6 +64,7 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
             </SelectItem>
             <SelectItem value="deepgram">Deepgram</SelectItem>
             <SelectItem value="assemblyai">AssemblyAI</SelectItem>
+            <SelectItem value="groq-whisper">Groq Whisper</SelectItem>
             <SelectItem value="add-custom" className="text-primary">
               <div className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
@@ -88,6 +90,7 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
           </SelectItem>
           <SelectItem value="deepgram">Deepgram</SelectItem>
           <SelectItem value="assemblyai">AssemblyAI</SelectItem>
+          <SelectItem value="groq-whisper">Groq Whisper</SelectItem>
           <SelectItem value="add-custom" className="text-primary">
             <div className="flex items-center gap-2">
               <Plus className="h-4 w-4" />

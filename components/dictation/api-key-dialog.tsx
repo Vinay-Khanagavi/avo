@@ -74,6 +74,7 @@ export function ApiKeyDialog({ open, onOpenChange, onSave }: ApiKeyDialogProps) 
                 <SelectItem value="whisper">Whisper (Custom)</SelectItem>
                 <SelectItem value="deepgram">Deepgram</SelectItem>
                 <SelectItem value="assemblyai">AssemblyAI</SelectItem>
+                <SelectItem value="groq-whisper">Groq Whisper</SelectItem>
               </SelectContent>
             </Select>
           </div>
