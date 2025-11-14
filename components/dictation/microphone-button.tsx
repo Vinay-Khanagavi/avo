@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Mic, MicOff, Loader2 } from "lucide-react"
 import { createMediaRecorder, createAudioSlicer } from "@/lib/audio-processor"
+import { playRecordingStartSound, playRecordingEndSound } from "@/lib/audio-sounds"
 
 interface MicrophoneButtonProps {
   onStart: () => void
@@ -67,6 +68,7 @@ export function MicrophoneButton({
       })
 
       stopRecordingRef.current = stopFn
+      playRecordingStartSound()
       onStart()
     } catch (err) {
       console.error("Error starting recording:", err)
@@ -86,6 +88,7 @@ export function MicrophoneButton({
       streamRef.current = null
     }
 
+    playRecordingEndSound()
     onStop()
   }
 
