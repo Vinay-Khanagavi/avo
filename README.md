@@ -1,32 +1,38 @@
+
 # AVO
 
 Production-grade, real-time voice-to-text app with multi-service transcription, AI formatting, and custom dictionary. Built with Next.js 16, FastAPI, and PostgreSQL.
 
 ---
 
+
 ## Advanced Techniques & Algorithms
 
-- **Audio Buffer Overlap**: 5s chunks with 2s overlap for context
-- **Hash-Based Duplicate Detection**: Merges overlapping/duplicate transcript segments
-- **Smart Transcript Merging**: Aligns and merges partial results for seamless output
-- **Longest-Match Dictionary Replacement**: User-defined substitutions, sorted by length
-- **Streaming Architecture**: Real-time chunked audio upload and processing
-- **AI Post-Processing**: Optional formatting with Groq, OpenAI, or local LLM
+- **Audio Buffer Overlap**: 5-second audio chunks with 2-second overlap to preserve context and prevent word loss at chunk boundaries.
+- **Hash-Based Duplicate Detection**: Uses hashing of word sequences to detect and merge overlapping or repeated transcript segments across audio chunks.
+- **Smart Transcript Merging**: Aligns and merges partial results from streaming APIs, removing duplicates and ensuring seamless, incremental output.
+- **Longest-Match Dictionary Replacement**: Applies user-defined word/phrase substitutions, sorted by length, for maximum accuracy.
+- **Streaming Architecture**: Real-time chunked audio upload and processing, with low-latency feedback.
+- **AI Post-Processing**: Optional formatting with Groq, OpenAI, or local LLM for bullet points, grammar, and structure.
+
+See [`docs/WHISPERFLOW_MODEL_ANALYSIS.md`](./docs/WHISPERFLOW_MODEL_ANALYSIS.md) and [`docs/WISPR_FLOW_COMPARISON.md`](./docs/WISPR_FLOW_COMPARISON.md) for technical details.
 
 ---
+
 
 ## Features
 
-- Multi-service transcription: Whisper (FastAPI), Deepgram, AssemblyAI, Groq Whisper
-- AI formatting: Groq, OpenAI, or local LLM for bullet points, grammar, and structure
-- Custom dictionary: User-defined word/phrase substitutions
-- Authentication: NextAuth.js (email/password)
-- Transcription history: Search, copy, and manage past transcriptions
-- Settings: Choose provider, manage API keys, formatting preferences
-- Modern UI: ShadCN + Tailwind v4, mobile-first, accessible
-- Security: API key encryption, rate limiting, CORS, protected routes
+- **Multi-Service Transcription**: Whisper (self-hosted FastAPI), Deepgram, AssemblyAI, Groq Whisper (Groq API)
+- **AI Formatting**: Groq, OpenAI, or local LLM for bullet points, grammar, and smart formatting
+- **Custom Dictionary**: User-defined word/phrase substitutions for accuracy
+- **Authentication**: NextAuth.js (email/password)
+- **Transcription History**: Search, copy, and manage past transcriptions
+- **Settings**: Choose provider, manage API keys, and formatting preferences
+- **Modern UI**: ShadCN + Tailwind v4, mobile-first, accessible
+- **Security**: API key encryption, rate limiting, CORS, and protected routes
 
 ---
+
 
 ## Tech Stack
 
@@ -40,24 +46,15 @@ Production-grade, real-time voice-to-text app with multi-service transcription, 
 
 ---
 
+
 ## Architecture
 
-- Next.js 16 App Router: Main web app, API, and UI
-- Whisper Service (FastAPI): Streaming, chunked transcription with buffer overlap
-- Database: PostgreSQL + Prisma (users, transcriptions, dictionary, settings)
-- AI Formatting: Groq, OpenAI, or local LLM (Ollama)
+- **Next.js 16 App Router**: Main web app, API, and UI
+- **Whisper Service (FastAPI)**: Streaming, chunked transcription with buffer overlap
+- **Database**: PostgreSQL + Prisma (users, transcriptions, dictionary, settings)
+- **AI Formatting**: Groq, OpenAI, or local LLM (Ollama)
 
-All transcription services are routed through `/api/transcribe/stream` with a unified API.
-ASSEMBLYAI_API_KEY="your-assemblyai-key"
-
-│   ├── auth.ts          # NextAuth configuration
-
-# AI Voice Keyboard
-
-
-Production-grade, real-time voice-to-text app with multi-service transcription, AI formatting, and custom dictionary. Built with Next.js 16, FastAPI, and PostgreSQL.
-
----
+All transcription services are routed through `/api/transcribe/stream` with a unified API. See [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) for a full architecture and workflow breakdown.
 
 ## 🧪 Advanced Techniques & Algorithms
 
@@ -163,182 +160,5 @@ python app.py
 ```
 
 ├── app/                # Next.js app router, API, pages
-├── components/         # UI and feature components
-├── lib/                # Service integrations, utils
-├── prisma/             # DB schema, migrations
-├── whisper-service/    # FastAPI microservice (Python)
-├── types/              # TypeScript types
-```
-
 ---
 
-
-## 🧠 Key Concepts
-
-- **Audio Pipeline**: 5s WebM chunks, 2s buffer overlap, server-side merging
-- **Service Routing**: `/api/transcribe/stream` proxies to selected backend (Whisper, Deepgram, AssemblyAI, Groq Whisper)
-- **AI Formatting**: Optional, user-selectable, always falls back to raw transcript
-- **Dictionary**: Longest-match, word/phrase replacement, user-specific
-- **API Key Security**: Encrypted at rest, never sent to client
-
----
-
-## 🛠️ Development
-
-- **yarn dev**: Start Next.js app
-- **python app.py**: Start Whisper service
-- **yarn prisma studio**: DB browser
-- **yarn prisma migrate dev**: Run migrations
-
-See [`docs/`](./docs/) for advanced guides, deployment, and troubleshooting.
-
----
-
-
-## 🏭 Deployment
-
-- **Railway (recommended)**: One-click deploy for app and DB
-- **Whisper Service**: Deploy separately (Docker, EC2, Railway)
-- **Environment**: Set all required variables in Railway dashboard
-
-See [`docs/deployment/RAILWAY_DEPLOYMENT.md`](./docs/deployment/RAILWAY_DEPLOYMENT.md) for full instructions.
-
----
-
-## 🔒 Security & Best Practices
-
-- API keys encrypted (AES-256-CBC)
-- All API routes (except health) require auth
-- Rate limiting on transcription endpoints
-- CORS restricted in production
-- Never expose secrets to client
-
----
-
-## 📚 Documentation
-
-- [AI Post-Processing Plan](./docs/AI_POST_PROCESSING_PLAN.md)
-- [Whisper Service](./whisper-service/README.md)
-- [Deployment Guide](./docs/deployment/RAILWAY_DEPLOYMENT.md)
-- [Troubleshooting](./docs/troubleshooting/500_ERROR_FIX.md)
-
----
-
-## License
-
-MIT
-## 🧠 Key Concepts
-
-- **Audio Pipeline**: 5s WebM chunks, 2s buffer overlap, server-side merging
-- **Service Routing**: `/api/transcribe/stream` proxies to selected backend
-- **AI Formatting**: Optional, user-selectable, always falls back to raw transcript
-- **Dictionary**: Longest-match, word/phrase replacement, user-specific
-- **API Key Security**: Encrypted at rest, never sent to client
-
----
-
-## 🛠️ Development
-
-- **yarn dev**: Start Next.js app
-- **python app.py**: Start Whisper service
-- **yarn prisma studio**: DB browser
-- **yarn prisma migrate dev**: Run migrations
-
-See [`docs/`](./docs/) for advanced guides, deployment, and troubleshooting.
-
----
-
-## 🏭 Deployment
-
-- **Railway (recommended)**: One-click deploy for app and DB
-- **Whisper Service**: Deploy separately (Docker, EC2, Railway)
-- **Environment**: Set all required variables in Railway dashboard
-
-See [`docs/deployment/RAILWAY_DEPLOYMENT.md`](./docs/deployment/RAILWAY_DEPLOYMENT.md) for full instructions.
-
----
-
-## 🔒 Security & Best Practices
-
-- API keys encrypted (AES-256-CBC)
-- All API routes (except health) require auth
-- Rate limiting on transcription endpoints
-- CORS restricted in production
-- Never expose secrets to client
-
----
-
-## 📚 Documentation
-
-- [AI Post-Processing Plan](./docs/AI_POST_PROCESSING_PLAN.md)
-- [Whisper Service](./whisper-service/README.md)
-- [Deployment Guide](./docs/deployment/RAILWAY_DEPLOYMENT.md)
-- [Troubleshooting](./docs/troubleshooting/500_ERROR_FIX.md)
-
----
-
-## License
-
-MIT
-```
-
-## AWS Setup
-
-### Configure AWS Credentials
-
-The app uses AWS CLI credentials from `~/.aws/credentials`. Ensure you have:
-
-1. AWS CLI installed and configured:
-```bash
-aws configure
-```
-
-2. IAM user with Transcribe permissions:
-   - `transcribe:StartTranscriptionJob`
-   - `transcribe:GetTranscriptionJob`
-   - `s3:PutObject` (if using S3 for audio storage)
-
-### Production AWS Transcribe Setup
-
-For production, you'll need to:
-1. Set up an S3 bucket for audio storage
-2. Update `/app/api/transcribe/route.ts` to upload audio to S3
-3. Start transcription jobs and poll for completion
-4. Retrieve transcripts from the job results
-
-Currently, the API includes a mock implementation for development.
-
-## Deployment on Railway
-
-See the [Deployment Documentation](./docs/deployment/RAILWAY_DEPLOYMENT.md) for complete deployment instructions.
-
-Quick steps:
-1. **Create Railway project** and connect your GitHub repository
-2. **Add PostgreSQL** service in Railway
-3. **Set environment variables** (see [Deployment Guide](./docs/deployment/RAILWAY_DEPLOYMENT.md#step-3-configure-environment-variables))
-4. **Deploy**: Railway will automatically build and deploy
-
-For troubleshooting, see [Troubleshooting Guide](./docs/troubleshooting/500_ERROR_FIX.md).
-
-## Development Notes
-
-- The app uses **yarn** as the package manager
-- Tailwind v4 is configured with the Notebook theme from TweakCN
-- Audio processing happens client-side using Web Audio API
-- Authentication is handled server-side with NextAuth.js
-- Database queries use Prisma ORM
-
-## API Endpoints
-
-- `POST /api/signup` - User registration
-- `POST /api/auth/[...nextauth]` - NextAuth endpoints
-- `POST /api/transcribe` - Transcribe audio
-- `GET /api/transcriptions` - List transcriptions
-- `GET /api/dictionary` - List dictionary words
-- `POST /api/dictionary` - Add dictionary word
-- `PUT /api/dictionary` - Update dictionary word
-- `DELETE /api/dictionary` - Delete dictionary word
-
-## License
-
-MIT
