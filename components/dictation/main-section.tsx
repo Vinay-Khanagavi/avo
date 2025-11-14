@@ -35,7 +35,7 @@ const tabContents: Record<TabType, TabContent> = {
   message: {
     heading: "Try messaging a friend.",
     description: "Flow makes texting your friends easy, and even edits filler words and corrections for you.",
-    content: "Hey Michelle, meet me at my apartment lobby at 6pm, actually no, 7pm.",
+    content: "Hey Richard, meet me at my apartment lobby at 6pm, actually no, 7pm.",
   },
   list: {
     heading: "Try making a grocery list.",
