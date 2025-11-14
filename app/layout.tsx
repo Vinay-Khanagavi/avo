@@ -19,7 +19,7 @@ const figtree = Figtree({
 });
 
 export const metadata: Metadata = {
-  title: "AI Voice Keyboard - Speak to Type",
+  title: "AVO - Speak to Type",
   description: "Transform your voice into accurate, well-formatted text instantly",
 };
 

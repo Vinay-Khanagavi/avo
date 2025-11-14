@@ -49,7 +49,7 @@ export function SignupForm() {
     <Card className="w-full max-w-md">
       <CardHeader className="items-center text-center">
         <CardTitle>Create Account</CardTitle>
-        <CardDescription>Sign up to start using AI Voice Keyboard</CardDescription>
+        <CardDescription>Sign up to start using AVO</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -82,6 +82,10 @@ export function MainSection({
   onStop,
   onChunk,
 }: MainSectionProps) {
+  // Handler for reset button
+  const handleReset = () => {
+    if (setTranscript) setTranscript("");
+  };
   const [activeTab, setActiveTab] = useState<TabType>("prompt")
   const contentRef = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -194,7 +198,7 @@ export function MainSection({
         </div>
 
         {/* Tab Content */}
-        <div ref={contentRef} className="space-y-6 md:space-y-8 px-4 md:px-0">
+  <div ref={contentRef} className="space-y-6 md:space-y-8 px-4 md:px-0">
           {/* Heading and Description */}
           <div className="text-center space-y-3 md:space-y-4">
             <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium font-serif">
@@ -205,8 +209,28 @@ export function MainSection({
             </p>
           </div>
 
-          {/* Input Area */}
-          <div className="bg-white rounded-xl border border-gray-300 p-4 md:p-6 lg:p-8 shadow-sm">
+          {/* Input Area with Reset Button */}
+          <div className="bg-white rounded-xl border border-gray-300 p-4 md:p-6 lg:p-8 shadow-sm relative">
+            {/* Reset button, only show if transcript and interactive */}
+            {isInteractive && transcript && setTranscript && (
+              <div className="absolute top-3 right-3 z-20">
+                <div className="group relative">
+                  <button
+                    onClick={handleReset}
+                    className="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-full p-1 transition-colors shadow-sm focus:outline-none h-8 w-8 flex items-center justify-center"
+                    aria-label="Clear the message."
+                    type="button"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M19.418 15A7.978 7.978 0 0020 12c0-4.418-3.582-8-8-8a7.963 7.963 0 00-7.418 5M4.582 9A7.978 7.978 0 004 12c0 4.418 3.582 8 8 8a7.963 7.963 0 007.418-5" />
+                    </svg>
+                  </button>
+                  <span className="pointer-events-none absolute -top-8 right-1/2 translate-x-1/2 whitespace-nowrap bg-black text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-lg">
+                    Clear
+                  </span>
+                </div>
+              </div>
+            )}
             {currentContent.isEmail ? (
               <div className="space-y-6">
                 {/* Email Header */}
