@@ -155,12 +155,12 @@ export async function transcribeDeepgramChunk(
     }
     
     // Check if new transcript is entirely contained in existing (duplicate)
-      if (normalizedExisting.includes(normalizedTranscript)) {
-        return {
-          session_id: sessionId,
-          transcript: existingTranscript,
-          incremental: "",
-          is_final: true,
+    if (normalizedExisting.includes(normalizedTranscript)) {
+      return {
+        session_id: sessionId,
+        transcript: existingTranscript,
+        incremental: "",
+        is_final: true,
       }
     }
     
@@ -238,29 +238,37 @@ export async function transcribeDeepgramChunk(
       }
     }
     
-    // Default: if new transcript is longer, append it (might be a correction)
-    // Otherwise, keep existing to avoid duplicates
-      if (normalizedTranscript.length > normalizedExisting.length) {
-      // Try to extract new words by finding common prefix
-      let commonPrefixLength = 0
-        for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
-        if (existingWords[i].toLowerCase() === newWords[i].toLowerCase()) {
-          commonPrefixLength = i + 1
-          } else {
-            break
-          }
-        }
-        
-      if (commonPrefixLength < newWords.length) {
-        const incremental = newWords.slice(commonPrefixLength).join(" ")
-        const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
-        
-        return {
-          session_id: sessionId,
-          transcript: mergedTranscript,
-          incremental,
-          is_final: true,
-        }
+    // Try to extract new words by finding common prefix
+    let commonPrefixLength = 0
+    for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
+      if (existingWords[i].toLowerCase() === newWords[i].toLowerCase()) {
+        commonPrefixLength = i + 1
+      } else {
+        break
+      }
+    }
+    
+    // If we found a common prefix and there are new words after it
+    if (commonPrefixLength > 0 && commonPrefixLength < newWords.length) {
+      const incremental = newWords.slice(commonPrefixLength).join(" ")
+      const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
+      
+      return {
+        session_id: sessionId,
+        transcript: mergedTranscript,
+        incremental,
+        is_final: true,
+      }
+    }
+    
+    // If new is significantly longer (50%+), treat as new content
+    if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
+      const mergedTranscript = `${normalizedExisting} ${normalizedTranscript}`.trim()
+      return {
+        session_id: sessionId,
+        transcript: mergedTranscript,
+        incremental: normalizedTranscript,
+        is_final: true,
       }
     }
     
