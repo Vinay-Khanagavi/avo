@@ -4,8 +4,11 @@ Handles Whisper inconsistencies with capitalization, punctuation, and word bound
 """
 
 import difflib
+import logging
 import re
 from typing import Tuple
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_text(text: str) -> str:
@@ -115,6 +118,19 @@ def merge_at_word_boundary(existing_text: str, new_text: str) -> str:
     if new_normalized in existing_normalized:
         return existing_normalized
     
+    # Enhanced duplicate detection: Check similarity ratio
+    # If new_text is >85% similar to existing, it's likely a duplicate with minor variations
+    matcher = difflib.SequenceMatcher(None, normalize_text(existing_normalized), normalize_text(new_normalized))
+    similarity_ratio = matcher.ratio()
+    
+    # If similarity is very high (>85%), check if it's mostly duplicate content
+    if similarity_ratio > 0.85:
+        # Check if new_text is shorter or similar length - likely a duplicate variation
+        if len(new_normalized) <= len(existing_normalized) * 1.1:
+            # High similarity + similar/short length = likely duplicate
+            logger.debug(f"Rejecting high-similarity duplicate (ratio={similarity_ratio:.2f}): '{new_normalized[:50]}...'")
+            return existing_normalized
+    
     # Check if new text contains entire existing text (legitimate continuation)
     if new_normalized.startswith(existing_normalized):
         # Extract only the new part
@@ -133,6 +149,8 @@ def merge_at_word_boundary(existing_text: str, new_text: str) -> str:
     # Find the longest matching suffix of existing that matches a prefix of new
     # This handles cases where transcription slightly changes previous words
     best_match = 0
+    best_similarity = 0.0
+    
     for i in range(min(len(existing_words), len(new_words)), 0, -1):
         existing_suffix = ' '.join(existing_words[-i:])
         new_prefix = ' '.join(new_words[:i])
@@ -141,14 +159,28 @@ def merge_at_word_boundary(existing_text: str, new_text: str) -> str:
         existing_suffix_norm = existing_suffix.lower().replace('.', '').replace(',', '').replace('!', '').replace('?', '').replace(';', '').replace(':', '')
         new_prefix_norm = new_prefix.lower().replace('.', '').replace(',', '').replace('!', '').replace('?', '').replace(';', '').replace(':', '')
         
+        # Use fuzzy matching for better duplicate detection
         if existing_suffix_norm == new_prefix_norm:
             best_match = i
             break
+        else:
+            # Check similarity for near-matches (handles transcription variations)
+            suffix_matcher = difflib.SequenceMatcher(None, existing_suffix_norm, new_prefix_norm)
+            similarity = suffix_matcher.ratio()
+            if similarity > 0.9 and similarity > best_similarity:  # >90% similar
+                best_match = i
+                best_similarity = similarity
     
     # If we found a good match, extract only the new words
     if best_match > 0 and best_match < len(new_words):
         incremental = ' '.join(new_words[best_match:])
-        return f"{existing_normalized} {incremental}".strip()
+        # Only add incremental if it's substantial (more than 2 words or meaningful content)
+        if len(incremental.split()) > 2 or len(incremental) > 10:
+            return f"{existing_normalized} {incremental}".strip()
+        else:
+            # Very short incremental might be duplicate - return existing
+            logger.debug(f"Rejecting short incremental: '{incremental}'")
+            return existing_normalized
     
     # If new transcript is significantly longer, check for word overlap
     # Only accept if it's at least 50% longer to avoid false positives

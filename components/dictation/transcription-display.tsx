@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Copy, Check } from "lucide-react"
@@ -15,6 +15,14 @@ export function TranscriptionDisplay({
   isProcessing = false,
 }: TranscriptionDisplayProps) {
   const [copied, setCopied] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when transcript updates
+  useEffect(() => {
+    if (scrollContainerRef.current && transcript) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+    }
+  }, [transcript])
 
   const handleCopy = async () => {
     if (!transcript) return
@@ -32,9 +40,12 @@ export function TranscriptionDisplay({
     <Card className="w-full">
       <CardContent className="p-6">
         <div className="relative group">
-          <div className="min-h-[200px] max-h-[400px] overflow-y-auto">
+          <div 
+            ref={scrollContainerRef}
+            className="min-h-[200px] max-h-[600px] overflow-y-auto"
+          >
             {transcript ? (
-              <p className={`text-lg leading-relaxed whitespace-pre-wrap ${
+              <p className={`text-lg leading-relaxed whitespace-pre-wrap break-words ${
                 transcript.startsWith("[Error:") ? "text-destructive" : ""
               }`}>
                 {transcript}

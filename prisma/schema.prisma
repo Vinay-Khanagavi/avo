@@ -18,6 +18,7 @@ model User {
   createdAt     DateTime        @default(now()) @map("created_at")
   transcriptions Transcription[]
   dictionary    Dictionary[]
+  settings      UserSettings?
 
   @@map("users")
 }
@@ -46,5 +47,30 @@ model Dictionary {
 
   @@unique([userId, word])
   @@map("dictionary")
+  @@index([userId])
+}
+
+model UserSettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique @map("user_id")
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // AI Formatter Settings
+  aiFormatterProvider   String?  @map("ai_formatter_provider") // groq, openai, local, none
+  groqApiKey            String?  @map("groq_api_key") // Encrypted
+  openaiApiKey          String?  @map("openai_api_key") // Encrypted
+  ollamaUrl             String?  @map("ollama_url") // For local LLM
+  
+  // AI Formatter Options
+  detectBulletPoints    Boolean  @default(true) @map("detect_bullet_points")
+  refineGrammar         Boolean  @default(true) @map("refine_grammar")
+  improvePunctuation    Boolean  @default(true) @map("improve_punctuation")
+  improveCapitalization Boolean  @default(true) @map("improve_capitalization")
+  addFormatting         Boolean  @default(true) @map("add_formatting")
+  
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("user_settings")
   @@index([userId])
 }

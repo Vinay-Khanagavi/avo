@@ -10,12 +10,13 @@ import tempfile
 import logging
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from queue import Queue
 from threading import Lock
 
 import whisper
 import ffmpeg
+import numpy as np
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -149,10 +150,15 @@ model_lock = Lock()
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
 WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "5"))
-SESSION_TTL = int(os.getenv("SESSION_TTL", "600"))  # 10 minutes
+SESSION_TTL = int(os.getenv("SESSION_TTL", "1800"))  # 30 minutes - increased for long sessions
 BUFFER_OVERLAP_SECONDS = float(os.getenv("BUFFER_OVERLAP_SECONDS", "2.0"))
 WHISPER_API_KEY = os.getenv("WHISPER_API_KEY", "")
 REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "true").lower() == "true"
+
+# WhisperFlow: Hush word detection (silence detection) configuration
+ENABLE_HUSH_DETECTION = os.getenv("ENABLE_HUSH_DETECTION", "true").lower() == "true"
+SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "0.01"))  # RMS energy threshold
+SILENCE_DURATION = float(os.getenv("SILENCE_DURATION", "0.5"))  # Minimum silence duration in seconds
 
 # Validate API key configuration
 if REQUIRE_API_KEY and not WHISPER_API_KEY:
@@ -165,14 +171,104 @@ elif not REQUIRE_API_KEY:
 processing_queue = Queue(maxsize=10)
 
 
+def detect_silence(audio_path: str) -> Tuple[bool, float]:
+    """
+    WhisperFlow: Detect silence (hush word) in audio using energy analysis.
+    
+    Args:
+        audio_path: Path to WAV audio file
+        
+    Returns:
+        Tuple of (has_silence, silence_ratio)
+        - has_silence: True if significant silence detected
+        - silence_ratio: Ratio of silent frames (0.0 to 1.0)
+    """
+    try:
+        # Read audio file using ffmpeg
+        probe = ffmpeg.probe(audio_path)
+        sample_rate = int(probe['streams'][0]['sample_rate'])
+        
+        # Extract audio data as numpy array
+        out, _ = (
+            ffmpeg
+            .input(audio_path)
+            .output('pipe:', format='s16le', acodec='pcm_s16le', ac=1, ar=sample_rate)
+            .run(capture_stdout=True, capture_stderr=True, quiet=True)
+        )
+        
+        # Convert bytes to numpy array
+        audio_data = np.frombuffer(out, dtype=np.int16).astype(np.float32) / 32768.0
+        
+        # Calculate RMS energy in frames
+        frame_length = int(sample_rate * 0.025)  # 25ms frames
+        hop_length = int(sample_rate * 0.010)  # 10ms hop
+        
+        frames = []
+        for i in range(0, len(audio_data) - frame_length, hop_length):
+            frame = audio_data[i:i + frame_length]
+            rms = np.sqrt(np.mean(frame ** 2))
+            frames.append(rms)
+        
+        if not frames:
+            return False, 0.0
+        
+        # Count silent frames (below threshold)
+        silent_frames = sum(1 for rms in frames if rms < SILENCE_THRESHOLD)
+        silence_ratio = silent_frames / len(frames)
+        
+        # Check if we have significant silence
+        # Consider silence if >30% of frames are silent
+        has_silence = silence_ratio > 0.3
+        
+        logger.debug(f"Silence detection: ratio={silence_ratio:.2f}, has_silence={has_silence}")
+        
+        return has_silence, silence_ratio
+        
+    except Exception as e:
+        logger.warning(f"Silence detection failed: {e}. Assuming no silence.")
+        return False, 0.0
+
+
 def get_whisper_model():
-    """Load Whisper model (singleton pattern)."""
+    """
+    Load Whisper model (singleton pattern).
+    WhisperFlow: Optimized GPU/CPU device selection.
+    """
     global whisper_model
     if whisper_model is None:
         with model_lock:
             if whisper_model is None:
-                logger.info(f"Loading Whisper model: {WHISPER_MODEL}")
-                whisper_model = whisper.load_model(WHISPER_MODEL, device=WHISPER_DEVICE)
+                # WhisperFlow: GPU/CPU split optimization
+                device = WHISPER_DEVICE
+                
+                # Auto-detect GPU if device is 'auto' or 'cuda'
+                if device in ['auto', 'cuda']:
+                    try:
+                        import torch
+                        if torch.cuda.is_available():
+                            device = 'cuda'
+                            logger.info(f"GPU detected: {torch.cuda.get_device_name(0)}")
+                        else:
+                            device = 'cpu'
+                            logger.info("GPU not available, using CPU")
+                    except ImportError:
+                        device = 'cpu'
+                        logger.warning("PyTorch not available, using CPU")
+                
+                logger.info(f"Loading Whisper model: {WHISPER_MODEL} on device: {device}")
+                whisper_model = whisper.load_model(WHISPER_MODEL, device=device)
+                
+                # Log device info for monitoring
+                if device == 'cuda':
+                    try:
+                        import torch
+                        logger.info(f"Model loaded on GPU: {torch.cuda.get_device_name(0)}")
+                        logger.info(f"GPU memory allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+                    except:
+                        pass
+                else:
+                    logger.info("Model loaded on CPU")
+                
                 logger.info("Whisper model loaded successfully")
     return whisper_model
 
@@ -373,6 +469,17 @@ async def health_check():
     redis_connected = False
     active_sessions = 0
     model_loaded = whisper_model is not None
+    gpu_available = False
+    device_used = WHISPER_DEVICE
+    
+    # Check GPU availability
+    try:
+        import torch
+        gpu_available = torch.cuda.is_available()
+        if gpu_available and WHISPER_DEVICE in ['auto', 'cuda']:
+            device_used = 'cuda'
+    except ImportError:
+        pass
     
     # Trigger model load if not loaded (for warmup)
     if not model_loaded:
@@ -398,11 +505,18 @@ async def health_check():
     return {
         "status": "healthy",
         "model": WHISPER_MODEL,
-        "device": WHISPER_DEVICE,
+        "device": device_used,
+        "gpu_available": gpu_available,
         "model_loaded": model_loaded,
         "redis_connected": redis_connected,
         "active_sessions": active_sessions,
-        "ready": model_loaded  # Indicates if ready to process requests
+        "ready": model_loaded,  # Indicates if ready to process requests
+        "whisperflow_features": {
+            "timestamp_extraction": True,
+            "enhanced_buffer_management": True,
+            "hush_word_detection": ENABLE_HUSH_DETECTION,
+            "gpu_cpu_optimization": True
+        }
     }
 
 
@@ -454,10 +568,13 @@ async def create_session(
         "session_id": session_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "transcript": "",
+        "confirmed_transcript": "",  # WhisperFlow: Confirmed transcript portions
+        "unconfirmed_transcript": "",  # WhisperFlow: Recent unconfirmed portions
         "prompt": session_data.prompt,
         "chunk_count": 0,
         "last_chunk_time": None,
         "buffer_audio": None,  # Will store last 2 seconds of audio
+        "confirmation_rounds": 0,  # Track rounds for confirmation
     }
     
     save_session(session_id, session_data)
@@ -632,6 +749,17 @@ async def process_chunk(
                 os.unlink(tmp_webm_path)
             raise HTTPException(status_code=400, detail=f"Audio conversion failed: {str(e)}")
         
+        # WhisperFlow: Hush word detection (silence detection)
+        if ENABLE_HUSH_DETECTION:
+            has_silence, silence_ratio = detect_silence(tmp_wav_path)
+            session["last_silence_detected"] = has_silence
+            session["last_silence_ratio"] = silence_ratio
+            if has_silence:
+                logger.debug(f"Hush word detected (silence ratio: {silence_ratio:.2f}) - natural speech boundary")
+        else:
+            has_silence = False
+            silence_ratio = 0.0
+        
         # Load Whisper model
         model = get_whisper_model()
         
@@ -661,27 +789,144 @@ async def process_chunk(
         else:
             audio_path = tmp_wav_path
         
-        # Transcribe
+        # WhisperFlow: GPU/CPU optimized transcription
+        # Use fp16 for GPU (faster) and fp32 for CPU (more accurate)
+        use_fp16 = False
+        if WHISPER_DEVICE in ['cuda', 'auto']:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    use_fp16 = True  # GPU can handle fp16 efficiently
+            except ImportError:
+                pass
+        
+        # Transcribe with accuracy optimizations
         result = model.transcribe(
             audio_path,
             language="en",
             initial_prompt=session.get("prompt"),
-            fp16=False,  # Use fp32 for CPU
+            fp16=use_fp16,  # WhisperFlow: fp16 for GPU, fp32 for CPU
+            temperature=0.0,  # Deterministic output for consistency
+            best_of=5,  # Consider multiple candidates
+            beam_size=5,  # Beam search for better accuracy
+            compression_ratio_threshold=2.4,  # Filter repetitive text
+            logprob_threshold=-1.0,  # Remove low-confidence words
+            no_speech_threshold=0.6,  # Better silence detection
         )
         
-        new_transcript = result["text"].strip()
-        
-        # Extract only new portion if we used buffer overlap
+        # Extract only new portion if we used buffer overlap (WhisperFlow enhancement)
         if buffer_audio_path and os.path.exists(buffer_audio_path) and audio_path != tmp_wav_path:
-            # We transcribed buffer + new chunk, but only want the new portion
-            # Estimate: if buffer was 2s and new chunk is 5s, extract last ~5s worth of text
-            # For now, we'll use the full transcript and let merging handle it
-            # In production, you'd want to extract timestamps from Whisper
-            pass
+            # Get buffer duration to filter out segments from buffer
+            try:
+                buffer_probe = ffmpeg.probe(buffer_audio_path)
+                buffer_duration = float(buffer_probe['streams'][0]['duration'])
+                
+                # Extract segments from Whisper result
+                # IMPORTANT: Whisper segment timestamps are relative to the START of the audio file
+                # Since we transcribed buffer+new_chunk, timestamps start from 0 (beginning of buffer)
+                segments = result.get("segments", [])
+                
+                if not segments:
+                    # No segments, use text fallback
+                    new_transcript = result["text"].strip()
+                    logger.warning("No segments in Whisper result, using full text")
+                else:
+                    # Filter segments that start AFTER buffer duration
+                    # Segments with start < buffer_duration are from the buffer (duplicates)
+                    # Segments with start >= buffer_duration are from new chunk
+                    new_segments = []
+                    for segment in segments:
+                        segment_start = segment.get("start", 0)
+                        segment_end = segment.get("end", segment_start)
+                        
+                        # CRITICAL: Only include segments that start AFTER buffer duration
+                        # Use buffer_duration + 0.3s margin to be very conservative
+                        # This ensures we don't include any buffer content
+                        if segment_start >= buffer_duration + 0.3:
+                            new_segments.append(segment)
+                            logger.debug(f"Including segment: start={segment_start:.2f}s (buffer={buffer_duration:.2f}s)")
+                        else:
+                            logger.debug(f"Filtering out buffer segment: start={segment_start:.2f}s (buffer={buffer_duration:.2f}s)")
+                    
+                    # Reconstruct transcript from new segments only
+                    if new_segments:
+                        new_transcript = " ".join([seg.get("text", "").strip() for seg in new_segments]).strip()
+                        logger.info(f"✅ Timestamp extraction: {len(new_segments)}/{len(segments)} segments kept, filtered {len(segments) - len(new_segments)} buffer segments (buffer={buffer_duration:.2f}s)")
+                    else:
+                        # No new segments found - this means all segments were from buffer
+                        # This should NOT happen if timestamp extraction is working correctly
+                        logger.error(f"❌ CRITICAL: All {len(segments)} segments filtered out! Buffer={buffer_duration:.2f}s. This indicates timestamp extraction failure.")
+                        segment_times = [f"{s.get('start', 0):.2f}s" for s in segments[:5]]
+                        logger.error(f"Segment timestamps: {segment_times}")
+                        # Use empty transcript to prevent duplicates
+                        new_transcript = ""
+                        logger.warning("Using empty transcript to prevent duplicates - check timestamp extraction logic")
+            except Exception as e:
+                logger.error(f"❌ Timestamp-based extraction failed: {e}", exc_info=True)
+                # On error, use empty to prevent duplicates rather than using full transcript
+                new_transcript = ""
+                logger.warning("Using empty transcript due to extraction error to prevent duplicates")
+        else:
+            # No buffer overlap, use full transcript
+            new_transcript = result["text"].strip()
         
-        # Merge with existing transcript
-        existing_transcript = session.get("transcript", "")
-        merged_transcript = merge_at_word_boundary(existing_transcript, new_transcript)
+        # Enhanced buffer management: confirmed/unconfirmed transcripts (WhisperFlow enhancement)
+        confirmed_transcript = session.get("confirmed_transcript", "")
+        unconfirmed_transcript = session.get("unconfirmed_transcript", "")
+        chunk_count = session.get("chunk_count", 0)
+        confirmation_rounds = session.get("confirmation_rounds", 0)
+        
+        # CRITICAL: Check for duplicates BEFORE merging
+        # If new_transcript is empty or highly similar to existing, skip it
+        if not new_transcript or not new_transcript.strip():
+            logger.debug("Skipping empty new transcript")
+            merged_unconfirmed = unconfirmed_transcript
+            merged_transcript = merge_at_word_boundary(confirmed_transcript, merged_unconfirmed)
+        else:
+            # Check if new transcript is a duplicate of existing content
+            existing_full = merge_at_word_boundary(confirmed_transcript, unconfirmed_transcript)
+            
+            # Use similarity check to detect duplicates
+            from merge_transcripts import normalize_text
+            import difflib
+            existing_norm = normalize_text(existing_full)
+            new_norm = normalize_text(new_transcript)
+            
+            if existing_norm and new_norm:
+                similarity = difflib.SequenceMatcher(None, existing_norm, new_norm).ratio()
+                # If >90% similar and new is not significantly longer, it's likely a duplicate
+                if similarity > 0.90 and len(new_norm) <= len(existing_norm) * 1.1:
+                    logger.warning(f"⚠️ Rejecting duplicate transcript (similarity={similarity:.2f}): '{new_transcript[:60]}...'")
+                    merged_unconfirmed = unconfirmed_transcript
+                    merged_transcript = existing_full
+                else:
+                    # Merge new transcript with unconfirmed transcript
+                    # CRITICAL: Always append, never replace - preserve all text
+                    if unconfirmed_transcript:
+                        merged_unconfirmed = merge_at_word_boundary(unconfirmed_transcript, new_transcript)
+                    else:
+                        merged_unconfirmed = new_transcript
+                    
+                    # Simplified approach: Keep all text in unconfirmed until session ends
+                    # This ensures no text is lost during long sessions (5-10+ minutes)
+                    # The confirmed/unconfirmed split was causing text loss when confirming
+                    # Instead, we'll keep everything in unconfirmed and merge with confirmed only for display
+                    
+                    # Increment confirmation rounds but don't move text to confirmed
+                    # This prevents text loss during long sessions
+                    confirmation_rounds += 1
+                    
+                    # Full transcript is confirmed + unconfirmed for display
+                    # Always merge to ensure all text is shown
+                    merged_transcript = merge_at_word_boundary(confirmed_transcript, merged_unconfirmed)
+                    
+                    # Log for monitoring (but don't move text to confirmed during session)
+                    if confirmation_rounds % 10 == 0:
+                        logger.debug(f"Session progress: {confirmation_rounds} rounds, transcript length: {len(merged_transcript)} chars")
+            else:
+                # No existing content, use new transcript
+                merged_unconfirmed = new_transcript
+                merged_transcript = new_transcript
         
         # Store last 2 seconds of audio as buffer for next chunk
         buffer_wav_path = tmp_wav_path.replace(".wav", "_buffer.wav")
@@ -703,9 +948,12 @@ async def process_chunk(
             print(f"Warning: Buffer extraction failed: {e}")
             session["buffer_audio_path"] = None
         
-        # Update session with merged transcript
+        # Update session with merged transcript and buffer management state
         session["transcript"] = merged_transcript
+        session["confirmed_transcript"] = confirmed_transcript
+        session["unconfirmed_transcript"] = merged_unconfirmed
         session["chunk_count"] = session.get("chunk_count", 0) + 1
+        session["confirmation_rounds"] = confirmation_rounds
         session["last_chunk_time"] = datetime.now(timezone.utc).isoformat()
         
         save_session(session_id, session)
@@ -782,11 +1030,33 @@ async def finalize_session(session_id: str, request_obj=Depends(verify_api_key))
             logger.error(f"Invalid session type: {type(session)} for session {session_id}")
             raise HTTPException(status_code=500, detail="Invalid session data")
         
-        final_transcript = session.get("transcript", "")
+        # CRITICAL: Merge confirmed + unconfirmed to get complete transcript
+        # This ensures no text is lost during finalization
+        confirmed_transcript = session.get("confirmed_transcript", "")
+        unconfirmed_transcript = session.get("unconfirmed_transcript", "")
+        current_transcript = session.get("transcript", "")
+        
+        # Build final transcript from all sources
+        # Priority: current_transcript (most up-to-date) > confirmed + unconfirmed
+        if current_transcript:
+            final_transcript = current_transcript
+        else:
+            # Fallback: merge confirmed and unconfirmed
+            if confirmed_transcript and unconfirmed_transcript:
+                final_transcript = merge_at_word_boundary(confirmed_transcript, unconfirmed_transcript)
+            elif confirmed_transcript:
+                final_transcript = confirmed_transcript
+            elif unconfirmed_transcript:
+                final_transcript = unconfirmed_transcript
+            else:
+                final_transcript = ""
+        
+        logger.info(f"Finalizing session {session_id}: transcript length={len(final_transcript)} chars, chunks={session.get('chunk_count', 0)}")
         
         # Mark as completed
         session["status"] = "completed"
         session["completed_at"] = datetime.now(timezone.utc).isoformat()
+        session["final_transcript"] = final_transcript  # Store final transcript
         
         # Save before deleting (in case client needs to retrieve it)
         save_session(session_id, session)

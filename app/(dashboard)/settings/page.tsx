@@ -13,13 +13,26 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ServiceSelector, TranscriptionService } from "@/components/dictation/service-selector"
+import { Checkbox } from "@/components/ui/checkbox"
 
 export default function SettingsPage() {
   const [language, setLanguage] = useState("en-US")
   const [chunkSize, setChunkSize] = useState("5")
   const [transcriptionService, setTranscriptionService] = useState<TranscriptionService>("whisper")
+  
+  // AI Formatter Settings
+  const [aiFormatterProvider, setAiFormatterProvider] = useState<"groq" | "openai" | "local" | "none">("groq")
+  const [groqApiKey, setGroqApiKey] = useState("")
+  const [openaiApiKey, setOpenaiApiKey] = useState("")
+  const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434")
+  const [detectBulletPoints, setDetectBulletPoints] = useState(true)
+  const [refineGrammar, setRefineGrammar] = useState(true)
+  const [improvePunctuation, setImprovePunctuation] = useState(true)
+  const [improveCapitalization, setImproveCapitalization] = useState(true)
+  const [addFormatting, setAddFormatting] = useState(true)
+  const [loading, setLoading] = useState(false)
 
-  // Load settings from localStorage on mount
+  // Load settings from localStorage and API on mount
   useEffect(() => {
     const savedLanguage = localStorage.getItem("transcriptionLanguage")
     const savedChunkSize = localStorage.getItem("audioChunkSize")
@@ -28,7 +41,45 @@ export default function SettingsPage() {
     if (savedLanguage) setLanguage(savedLanguage)
     if (savedChunkSize) setChunkSize(savedChunkSize)
     if (savedService) setTranscriptionService(savedService)
+    
+    // Load AI formatter settings from API
+    loadAISettings()
   }, [])
+  
+  const loadAISettings = async () => {
+    try {
+      const response = await fetch("/api/settings")
+      if (response.ok) {
+        const data = await response.json()
+        console.log("Loaded AI settings:", data) // Debug log
+        setAiFormatterProvider(data.aiFormatterProvider || "groq")
+        setGroqApiKey(data.groqApiKey || "")
+        setOpenaiApiKey(data.openaiApiKey || "")
+        setOllamaUrl(data.ollamaUrl || "http://localhost:11434")
+        setDetectBulletPoints(data.detectBulletPoints !== undefined ? data.detectBulletPoints : true)
+        setRefineGrammar(data.refineGrammar !== undefined ? data.refineGrammar : true)
+        setImprovePunctuation(data.improvePunctuation !== undefined ? data.improvePunctuation : true)
+        setImproveCapitalization(data.improveCapitalization !== undefined ? data.improveCapitalization : true)
+        setAddFormatting(data.addFormatting !== undefined ? data.addFormatting : true)
+      } else {
+        const errorText = await response.text()
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: errorText || `HTTP ${response.status}` }
+        }
+        console.error("Failed to load AI settings:", response.status, errorData)
+        // Don't show alert for 500 errors - just log and use defaults
+        if (response.status !== 500) {
+          console.warn("Using default AI settings due to error")
+        }
+      }
+    } catch (error: any) {
+      console.error("Failed to load AI settings:", error)
+      // Use defaults on error - don't break the UI
+    }
+  }
 
   // Listen for storage changes (when updated in dictation page)
   useEffect(() => {
@@ -56,15 +107,50 @@ export default function SettingsPage() {
   }, [transcriptionService])
 
   const handleSave = async () => {
-    // Save settings to localStorage or API
-    localStorage.setItem("transcriptionLanguage", language)
-    localStorage.setItem("audioChunkSize", chunkSize)
-    localStorage.setItem("transcriptionService", transcriptionService)
-    
-    // Trigger custom event for same-tab sync
-    window.dispatchEvent(new Event("transcriptionServiceChanged"))
-    
-    alert("Settings saved!")
+    setLoading(true)
+    try {
+      // Save transcription settings to localStorage
+      localStorage.setItem("transcriptionLanguage", language)
+      localStorage.setItem("audioChunkSize", chunkSize)
+      localStorage.setItem("transcriptionService", transcriptionService)
+      
+      // Trigger custom event for same-tab sync
+      window.dispatchEvent(new Event("transcriptionServiceChanged"))
+      
+      // Save AI formatter settings to API
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          aiFormatterProvider: aiFormatterProvider,
+          groqApiKey: groqApiKey,
+          openaiApiKey: openaiApiKey,
+          ollamaUrl: ollamaUrl,
+          detectBulletPoints: detectBulletPoints,
+          refineGrammar: refineGrammar,
+          improvePunctuation: improvePunctuation,
+          improveCapitalization: improveCapitalization,
+          addFormatting: addFormatting,
+        }),
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        alert("Settings saved successfully!")
+        // Reload settings to ensure UI is in sync
+        await loadAISettings()
+      } else {
+        const error = await response.json().catch(() => ({ error: "Unknown error" }))
+        alert(`Failed to save settings: ${error.error || "Unknown error"}`)
+      }
+    } catch (error) {
+      console.error("Error saving settings:", error)
+      alert("Failed to save settings. Please try again.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleServiceChange = (service: TranscriptionService) => {
@@ -145,8 +231,156 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            <Button onClick={handleSave} className="h-11 px-6 shadow-sm">
-              Save Settings
+            <Button onClick={handleSave} className="h-11 px-6 shadow-sm" disabled={loading}>
+              {loading ? "Saving..." : "Save Settings"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-gray-300 shadow-md">
+          <CardHeader>
+            <CardTitle>AI Formatter Settings</CardTitle>
+            <CardDescription>
+              Configure AI-powered text formatting (like Wispr Flow)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="aiFormatterProvider">AI Formatter Provider</Label>
+              <Select 
+                value={aiFormatterProvider} 
+                onValueChange={(value: "groq" | "openai" | "local" | "none") => setAiFormatterProvider(value as "groq" | "openai" | "local" | "none")}
+              >
+                <SelectTrigger
+                  id="aiFormatterProvider"
+                  className="h-11 w-full border-gray-300 bg-background text-base shadow-xs focus-visible:border-ring"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="groq">Groq API (Recommended)</SelectItem>
+                  <SelectItem value="openai">OpenAI GPT-4o-mini</SelectItem>
+                  <SelectItem value="local">Local LLM (Ollama)</SelectItem>
+                  <SelectItem value="none">Disabled</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Choose which AI service to use for formatting transcripts. Groq API is recommended for fast inference.
+              </p>
+            </div>
+
+            {aiFormatterProvider === "groq" && (
+              <div className="space-y-2">
+                <Label htmlFor="groqApiKey">Groq API Key (Optional)</Label>
+                <Input
+                  id="groqApiKey"
+                  type="password"
+                  value={groqApiKey}
+                  onChange={(e) => setGroqApiKey(e.target.value)}
+                  placeholder="Leave empty to use default Groq API key"
+                  className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional: Add your own Groq API key. If left empty, the default key will be used. Get your key from console.groq.com
+                </p>
+              </div>
+            )}
+
+            {aiFormatterProvider === "openai" && (
+              <div className="space-y-2">
+                <Label htmlFor="openaiApiKey">OpenAI API Key</Label>
+                <Input
+                  id="openaiApiKey"
+                  type="password"
+                  value={openaiApiKey}
+                  onChange={(e) => setOpenaiApiKey(e.target.value)}
+                  placeholder="Enter your OpenAI API key"
+                  className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your API key is encrypted and stored securely. Get your key from platform.openai.com
+                </p>
+              </div>
+            )}
+
+            {aiFormatterProvider === "local" && (
+              <div className="space-y-2">
+                <Label htmlFor="ollamaUrl">Ollama URL</Label>
+                <Input
+                  id="ollamaUrl"
+                  type="text"
+                  value={ollamaUrl}
+                  onChange={(e) => setOllamaUrl(e.target.value)}
+                  placeholder="http://localhost:11434"
+                  className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+                />
+                <p className="text-xs text-muted-foreground">
+                  URL of your local Ollama instance. Default: http://localhost:11434
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-4 pt-4 border-t">
+              <Label>Formatting Options</Label>
+              
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="detectBulletPoints"
+                  checked={detectBulletPoints}
+                  onCheckedChange={(checked) => setDetectBulletPoints(checked === true)}
+                />
+                <Label htmlFor="detectBulletPoints" className="font-normal cursor-pointer">
+                  Convert "point" to bullet points (•)
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="refineGrammar"
+                  checked={refineGrammar}
+                  onCheckedChange={(checked) => setRefineGrammar(checked === true)}
+                />
+                <Label htmlFor="refineGrammar" className="font-normal cursor-pointer">
+                  Refine grammar and sentence structure
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="improvePunctuation"
+                  checked={improvePunctuation}
+                  onCheckedChange={(checked) => setImprovePunctuation(checked === true)}
+                />
+                <Label htmlFor="improvePunctuation" className="font-normal cursor-pointer">
+                  Improve punctuation
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="improveCapitalization"
+                  checked={improveCapitalization}
+                  onCheckedChange={(checked) => setImproveCapitalization(checked === true)}
+                />
+                <Label htmlFor="improveCapitalization" className="font-normal cursor-pointer">
+                  Fix capitalization
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="addFormatting"
+                  checked={addFormatting}
+                  onCheckedChange={(checked) => setAddFormatting(checked === true)}
+                />
+                <Label htmlFor="addFormatting" className="font-normal cursor-pointer">
+                  Add proper formatting (paragraphs, lists)
+                </Label>
+              </div>
+            </div>
+            
+            <Button onClick={handleSave} className="h-11 px-6 shadow-sm w-full" disabled={loading}>
+              {loading ? "Saving..." : "Save AI Formatter Settings"}
             </Button>
           </CardContent>
         </Card>

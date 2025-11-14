@@ -137,3 +137,4 @@ Potential future enhancements:
 4. **VAD (Voice Activity Detection)**: Better silence detection before transcription
 5. **Speaker diarization**: Identify different speakers in multi-speaker audio
 
+

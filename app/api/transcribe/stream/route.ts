@@ -11,6 +11,9 @@ import {
   transcribeAssemblyAIChunk, 
   finalizeAssemblyAISession 
 } from "@/lib/assemblyai-service"
+import { aiFormatTranscript } from "@/lib/ai-formatter"
+import { applyDictionaryReplacements } from "@/lib/dictionary-replace"
+import { getUserAISettings } from "@/lib/user-settings"
 
 const WHISPER_SERVICE_URL = process.env.WHISPER_SERVICE_URL || "http://localhost:8000"
 const WHISPER_API_KEY = process.env.WHISPER_API_KEY || ""
@@ -66,13 +69,42 @@ export async function POST(request: NextRequest) {
               prompt
             )
 
+            // Apply AI formatting if available
+            let formattedTranscript = result.transcript
+            try {
+              const userSettings = await getUserAISettings()
+              if (userSettings.provider !== 'none') {
+                formattedTranscript = await aiFormatTranscript(result.transcript, {
+                  detectBulletPoints: userSettings.detectBulletPoints,
+                  refineGrammar: userSettings.refineGrammar,
+                  improvePunctuation: userSettings.improvePunctuation,
+                  improveCapitalization: userSettings.improveCapitalization,
+                  addFormatting: userSettings.addFormatting,
+                }, {
+                  provider: userSettings.provider,
+                  apiKey: userSettings.provider === 'groq' ? userSettings.groqApiKey : 
+                          userSettings.provider === 'openai' ? userSettings.openaiApiKey : undefined,
+                })
+              }
+            } catch (error) {
+              console.error("AI formatting failed, using raw transcript:", error)
+              // Continue with raw transcript if formatting fails
+            }
+
+            // Update result with formatted transcript
+            const finalResult = {
+              ...result,
+              transcript: formattedTranscript,
+              incremental: formattedTranscript.slice(existingTranscript.length),
+            }
+
             // Update session storage
             sessionStorage.set(sessionId, {
-              transcript: result.transcript,
+              transcript: formattedTranscript,
               service: "deepgram",
             })
 
-            return NextResponse.json(result)
+            return NextResponse.json(finalResult)
           } catch (error: any) {
             console.error("Deepgram transcription error:", error)
             return NextResponse.json(
@@ -94,13 +126,42 @@ export async function POST(request: NextRequest) {
               prompt
             )
 
+            // Apply AI formatting if available
+            let formattedTranscript = result.transcript
+            try {
+              const userSettings = await getUserAISettings()
+              if (userSettings.provider !== 'none') {
+                formattedTranscript = await aiFormatTranscript(result.transcript, {
+                  detectBulletPoints: userSettings.detectBulletPoints,
+                  refineGrammar: userSettings.refineGrammar,
+                  improvePunctuation: userSettings.improvePunctuation,
+                  improveCapitalization: userSettings.improveCapitalization,
+                  addFormatting: userSettings.addFormatting,
+                }, {
+                  provider: userSettings.provider,
+                  apiKey: userSettings.provider === 'groq' ? userSettings.groqApiKey : 
+                          userSettings.provider === 'openai' ? userSettings.openaiApiKey : undefined,
+                })
+              }
+            } catch (error) {
+              console.error("AI formatting failed, using raw transcript:", error)
+              // Continue with raw transcript if formatting fails
+            }
+
+            // Update result with formatted transcript
+            const finalResult = {
+              ...result,
+              transcript: formattedTranscript,
+              incremental: formattedTranscript.slice(existingTranscript.length),
+            }
+
             // Update session storage
             sessionStorage.set(sessionId, {
-              transcript: result.transcript,
+              transcript: formattedTranscript,
               service: "assemblyai",
             })
 
-            return NextResponse.json(result)
+            return NextResponse.json(finalResult)
           } catch (error: any) {
             console.error("AssemblyAI transcription error:", error)
             return NextResponse.json(
@@ -137,6 +198,37 @@ export async function POST(request: NextRequest) {
             }
 
             const data = await response.json()
+            
+            // Apply AI formatting if available (for Whisper service)
+            if (data.transcript) {
+              try {
+                const userSettings = await getUserAISettings()
+                if (userSettings.provider !== 'none') {
+                  const formattedTranscript = await aiFormatTranscript(data.transcript, {
+                    detectBulletPoints: userSettings.detectBulletPoints,
+                    refineGrammar: userSettings.refineGrammar,
+                    improvePunctuation: userSettings.improvePunctuation,
+                    improveCapitalization: userSettings.improveCapitalization,
+                    addFormatting: userSettings.addFormatting,
+                  }, {
+                    provider: userSettings.provider,
+                    apiKey: userSettings.provider === 'grok' ? userSettings.grokApiKey : 
+                            userSettings.provider === 'openai' ? userSettings.openaiApiKey : undefined,
+                  })
+                  
+                  // Update transcript with formatted version
+                  data.transcript = formattedTranscript
+                  if (data.incremental) {
+                    const existingTranscript = data.transcript.slice(0, -data.incremental.length) || ""
+                    data.incremental = formattedTranscript.slice(existingTranscript.length)
+                  }
+                }
+              } catch (error) {
+                console.error("AI formatting failed for Whisper, using raw transcript:", error)
+                // Continue with raw transcript if formatting fails
+              }
+            }
+            
             return NextResponse.json(data)
           } catch (error: any) {
             if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
