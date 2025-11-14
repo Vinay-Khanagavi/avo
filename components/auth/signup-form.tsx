@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { AuthInput } from "@/components/auth/auth-input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -47,14 +47,14 @@ export function SignupForm() {
 
   return (
     <Card className="w-full max-w-md">
-      <CardHeader className="items-center text-center">
-        <CardTitle>Create Account</CardTitle>
-        <CardDescription>Sign up to start using AVO</CardDescription>
+      <CardHeader className="items-center text-center pt-4 pb-0">
+        <CardTitle className="mb-1">Create Account</CardTitle>
+        <CardDescription className="mb-0">Sign up to start using AVO</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Input
+            <AuthInput
               id="name"
               type="text"
               label="Name (Optional)"
@@ -64,7 +64,7 @@ export function SignupForm() {
             />
           </div>
           <div className="space-y-2">
-            <Input
+            <AuthInput
               id="email"
               type="email"
               label="Email"
@@ -75,7 +75,7 @@ export function SignupForm() {
             />
           </div>
           <div className="space-y-2">
-            <Input
+            <AuthInput
               id="password"
               type="password"
               label="Password"

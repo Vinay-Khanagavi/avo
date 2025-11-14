@@ -4,7 +4,7 @@ import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { AuthInput } from "@/components/auth/auth-input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -42,14 +42,14 @@ export function LoginForm() {
 
   return (
     <Card className="w-full max-w-md">
-      <CardHeader className="items-center text-center">
-        <CardTitle>Sign In</CardTitle>
-        <CardDescription>Enter your credentials to access your account</CardDescription>
+      <CardHeader className="items-center text-center pt-4 pb-0">
+        <CardTitle className="mb-1">Sign In</CardTitle>
+        <CardDescription className="mb-0">Enter your credentials to access your account</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Input
+            <AuthInput
               id="email"
               type="email"
               label="Email"
@@ -60,7 +60,7 @@ export function LoginForm() {
             />
           </div>
           <div className="space-y-2">
-            <Input
+            <AuthInput
               id="password"
               type="password"
               label="Password"
