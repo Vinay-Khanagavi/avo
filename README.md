@@ -50,6 +50,18 @@ AVO is a comprehensive voice transcription platform that combines multiple trans
 ### Audio Buffer Overlap
 5-second audio chunks with 2-second overlap preserve context and prevent word loss at chunk boundaries. The system maintains a rolling buffer that ensures continuity across segments.
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+- Framework: Next.js 16 (App Router)
+- UI: ShadCN UI (customized) + Tailwind CSS v4
+- Database: PostgreSQL with Prisma ORM
+- Authentication: NextAuth.js
+- Transcription APIs: Whisper (FastAPI), Deepgram, AssemblyAI, Groq Whisper
+- AI Formatting: Groq, OpenAI, Local LLM (Ollama)
+- Hosting: Railway, Docker, AWS EC2 (for Whisper)
+=======
+>>>>>>> 0b2bbda (refactor: Expand and reorganize README.md to enhance clarity on core features, advanced techniques, and technology stack)
 ### Hash-Based Duplicate Detection
 Word sequence hashing detects and merges overlapping or repeated transcript segments. The algorithm uses difflib similarity scoring with a 90% threshold to identify duplicates while preserving legitimate variations.
 
@@ -457,3 +469,7 @@ Contributions are welcome. Please:
 For issues and questions:
 - GitHub Issues: Report bugs and feature requests
 - Documentation: See `docs/` directory for detailed guides
+<<<<<<< HEAD
+=======
+>>>>>>> 37ae4af (refactor: Expand and reorganize README.md to enhance clarity on core features, advanced techniques, and technology stack)
+>>>>>>> 0b2bbda (refactor: Expand and reorganize README.md to enhance clarity on core features, advanced techniques, and technology stack)
