@@ -55,16 +55,3 @@ See [`docs/WHISPERFLOW_MODEL_ANALYSIS.md`](./docs/WHISPERFLOW_MODEL_ANALYSIS.md)
 - **AI Formatting**: Groq, OpenAI, or local LLM (Ollama)
 
 All transcription services are routed through `/api/transcribe/stream` with a unified API. See [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) for a full architecture and workflow breakdown.
-
-## 🧪 Advanced Techniques & Algorithms
-
-AVO leverages state-of-the-art techniques inspired by the Wispr Flow research paper to deliver highly accurate, real-time transcription:
-
-- **Audio Buffer Overlap**: 5-second audio chunks with 2-second overlap to preserve context and prevent word loss at chunk boundaries.
-- **Hash-Based Duplicate Detection**: Uses hashing of word sequences to detect and merge overlapping or repeated transcript segments across audio chunks.
-- **Smart Transcript Merging**: Aligns and merges partial results from streaming APIs, removing duplicates and ensuring seamless, incremental output.
-- **Longest-Match Dictionary Replacement**: Applies user-defined word/phrase substitutions, sorted by length, for maximum accuracy.
-- **Streaming Architecture**: Real-time chunked audio upload and processing, with low-latency feedback.
-- **AI Post-Processing**: Optional formatting with Groq, OpenAI, or local LLM for bullet points, grammar, and structure.
-
-See [`docs/WHISPERFLOW_MODEL_ANALYSIS.md`](./docs/WHISPERFLOW_MODEL_ANALYSIS.md) and [`docs/WISPR_FLOW_COMPARISON.md`](./docs/WISPR_FLOW_COMPARISON.md) for technical details.
