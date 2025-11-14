@@ -112,6 +112,8 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setLoading(true)
+    const minLoadingTime = new Promise(resolve => setTimeout(resolve, 1500))
+    
     try {
       // Save transcription settings to localStorage
       localStorage.setItem("transcriptionLanguage", language)
@@ -140,6 +142,8 @@ export default function SettingsPage() {
         }),
       })
       
+      await minLoadingTime
+      
       if (response.ok) {
         const result = await response.json()
         showSnackbar("Settings saved successfully!", "success")
@@ -152,6 +156,7 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Error saving settings:", error)
       showSnackbar("Failed to save settings. Please try again.", "error")
+      await minLoadingTime
     } finally {
       setLoading(false)
     }
@@ -171,7 +176,7 @@ export default function SettingsPage() {
           <div>
             <h1 className="text-3xl font-bold">Settings</h1>
             <p className="text-muted-foreground">
-              Configure your transcription preferences
+              Configure your transcription preferences and AI formatting options
             </p>
           </div>
           <Button 
@@ -179,7 +184,15 @@ export default function SettingsPage() {
             className="h-11 px-6 shadow-sm bg-black text-white w-full sm:w-auto" 
             disabled={loading}
           >
-            {loading ? "Saving..." : "Save Settings"}
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
+              </span>
+            ) : "Save Settings"}
           </Button>
         </div>
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Copy, Check, Loader2 } from "lucide-react"
 import { format } from "date-fns"
+import { Snackbar, useSnackbar } from "@/components/ui/snackbar"
 
 interface Transcription {
   id: string
@@ -31,6 +32,7 @@ export function TranscriptionHistory() {
     totalPages: 0,
   })
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const { snackbar, showSnackbar, hideSnackbar } = useSnackbar()
 
   const fetchTranscriptions = async (page = 1, search = "") => {
     setIsLoading(true)
@@ -70,9 +72,11 @@ export function TranscriptionHistory() {
     try {
       await navigator.clipboard.writeText(text)
       setCopiedId(id)
+      showSnackbar("Copied to clipboard!", "success")
       setTimeout(() => setCopiedId(null), 2000)
     } catch (error) {
       console.error("Failed to copy:", error)
+      showSnackbar("Failed to copy", "error")
     }
   }
 
@@ -162,6 +166,13 @@ export function TranscriptionHistory() {
           )}
         </>
       )}
+
+      <Snackbar
+        message={snackbar.message}
+        type={snackbar.type}
+        isVisible={snackbar.isVisible}
+        onClose={hideSnackbar}
+      />
     </div>
   )
 }
