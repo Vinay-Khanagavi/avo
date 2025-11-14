@@ -60,7 +60,7 @@ Production-grade, real-time voice-to-text app with multi-service transcription, 
 
 ---
 
-## 🧪 Advanced Techniques & Algorithms
+## Advanced Techniques & Algorithms
 
 - **Audio Buffer Overlap**: 5s chunks with 2s overlap for context
 - **Hash-Based Duplicate Detection**: Merges overlapping/duplicate transcript segments
@@ -71,7 +71,7 @@ Production-grade, real-time voice-to-text app with multi-service transcription, 
 
 ---
 
-## ✨ Features
+## Features
 
 - Multi-service transcription: Whisper (FastAPI), Deepgram, AssemblyAI, Groq Whisper
 - AI formatting: Groq, OpenAI, or local LLM for bullet points, grammar, and structure
@@ -84,7 +84,7 @@ Production-grade, real-time voice-to-text app with multi-service transcription, 
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - Framework: Next.js 16 (App Router)
 - UI: ShadCN UI (customized) + Tailwind CSS v4
@@ -96,7 +96,7 @@ Production-grade, real-time voice-to-text app with multi-service transcription, 
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 - Next.js 16 App Router: Main web app, API, and UI
 - Whisper Service (FastAPI): Streaming, chunked transcription with buffer overlap
