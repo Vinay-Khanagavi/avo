@@ -230,14 +230,16 @@ export default function SettingsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="chunkSize">Audio Chunk Size (seconds)</Label>
-              <Input
+              <input
                 id="chunkSize"
                 type="number"
                 min="3"
                 max="10"
                 value={chunkSize}
                 onChange={(e) => setChunkSize(e.target.value)}
-                className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+                className="h-11 border border-gray-300 text-base shadow-xs focus-visible:border-black rounded-md bg-white w-full px-4 placeholder-gray-400 flex items-center"
+                style={{display: "flex", alignItems: "center"}}
+                autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
                 Smaller chunks provide faster transcription but may reduce accuracy.
@@ -294,13 +296,15 @@ export default function SettingsPage() {
             {aiFormatterProvider === "groq" && (
               <div className="space-y-2">
                 <Label htmlFor="groqApiKey">Groq API Key (Optional)</Label>
-                <Input
+                <input
                   id="groqApiKey"
                   type="password"
                   value={groqApiKey}
                   onChange={(e) => setGroqApiKey(e.target.value)}
                   placeholder="Leave empty to use default Groq API key"
-                  className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+                  className="h-11 border border-gray-300 text-base shadow-xs focus-visible:border-black rounded-md bg-white w-full px-4 placeholder-gray-400 flex items-center"
+                  style={{display: "flex", alignItems: "center"}}
+                  autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
                   Optional: Add your own Groq API key. If left empty, the default key will be used. Get your key from console.groq.com
@@ -311,13 +315,15 @@ export default function SettingsPage() {
             {aiFormatterProvider === "openai" && (
               <div className="space-y-2">
                 <Label htmlFor="openaiApiKey">OpenAI API Key</Label>
-                <Input
+                <input
                   id="openaiApiKey"
                   type="password"
                   value={openaiApiKey}
                   onChange={(e) => setOpenaiApiKey(e.target.value)}
                   placeholder="Enter your OpenAI API key"
-                  className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+                  className="h-11 border border-gray-300 text-base shadow-xs focus-visible:border-black rounded-md bg-white w-full px-4 placeholder-gray-400 flex items-center"
+                  style={{display: "flex", alignItems: "center"}}
+                  autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
                   Your API key is encrypted and stored securely. Get your key from platform.openai.com
@@ -328,13 +334,15 @@ export default function SettingsPage() {
             {aiFormatterProvider === "local" && (
               <div className="space-y-2">
                 <Label htmlFor="ollamaUrl">Ollama URL</Label>
-                <Input
+                <input
                   id="ollamaUrl"
                   type="text"
                   value={ollamaUrl}
                   onChange={(e) => setOllamaUrl(e.target.value)}
                   placeholder="http://localhost:11434"
-                  className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+                  className="h-11 border border-gray-300 text-base shadow-xs focus-visible:border-black rounded-md bg-white w-full px-4 placeholder-gray-400 flex items-center"
+                  style={{display: "flex", alignItems: "center"}}
+                  autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
                   URL of your local Ollama instance. Default: http://localhost:11434

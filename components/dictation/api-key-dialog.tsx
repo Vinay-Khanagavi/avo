@@ -66,7 +66,8 @@ export function ApiKeyDialog({ open, onOpenChange, onSave }: ApiKeyDialogProps) 
             <Select value={service} onValueChange={setService}>
               <SelectTrigger
                 id="service"
-                className="h-11 w-full border-gray-300 bg-background text-base shadow-xs focus-visible:border-ring"
+                className="h-11 w-full border-gray-300 bg-background text-base shadow-xs focus-visible:border-ring outline-none focus:outline-none focus-visible:outline-none"
+                style={{alignItems: "center"}}
               >
                 <SelectValue />
               </SelectTrigger>
@@ -82,13 +83,15 @@ export function ApiKeyDialog({ open, onOpenChange, onSave }: ApiKeyDialogProps) 
           {service === "whisper" && (
             <div className="space-y-2">
               <Label htmlFor="serviceUrl">Service URL (Optional)</Label>
-              <Input
+              <input
                 id="serviceUrl"
                 type="url"
                 placeholder="http://localhost:8000"
                 value={serviceUrl}
                 onChange={(e) => setServiceUrl(e.target.value)}
-                className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+                className="h-11 border border-gray-300 text-base shadow-xs focus-visible:border-black rounded-md bg-white w-full px-4 placeholder-gray-400 flex items-center"
+                style={{display: "flex", alignItems: "center"}}
+                autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
                 Leave empty to use default AWS-hosted Whisper service
@@ -98,13 +101,15 @@ export function ApiKeyDialog({ open, onOpenChange, onSave }: ApiKeyDialogProps) 
 
           <div className="space-y-2">
             <Label htmlFor="apiKey">API Key</Label>
-            <Input
+            <input
               id="apiKey"
               type="password"
               placeholder="Enter your API key"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="h-11 border-gray-300 text-base shadow-xs focus-visible:border-ring"
+              className="h-11 border border-gray-300 text-base shadow-xs focus-visible:border-black rounded-md bg-white w-full px-4 placeholder-gray-400 flex items-center"
+              style={{display: "flex", alignItems: "center"}}
+              autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
               Your API key is stored locally and never shared

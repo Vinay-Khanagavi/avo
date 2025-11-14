@@ -102,13 +102,16 @@ export function DictionaryForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="word">Word</Label>
-            <Input
+            <input
               id="word"
               value={word}
               onChange={(e) => setWord(e.target.value)}
               placeholder="e.g., JavaScript"
               required
               disabled={isLoading || !!editingWord}
+              className="h-11 border border-gray-300 text-base shadow-xs focus-visible:border-black rounded-md bg-white w-full px-4 placeholder-gray-400 flex items-center"
+              style={{display: "flex", alignItems: "center"}}
+              autoComplete="off"
             />
             {editingWord && (
               <p className="text-xs text-muted-foreground">
@@ -118,12 +121,15 @@ export function DictionaryForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="substitution">Substitution (Optional)</Label>
-            <Input
+            <input
               id="substitution"
               value={substitution}
               onChange={(e) => setSubstitution(e.target.value)}
               placeholder="e.g., JS"
               disabled={isLoading}
+              className="h-11 border border-gray-300 text-base shadow-xs focus-visible:border-black rounded-md bg-white w-full px-4 placeholder-gray-400 flex items-center"
+              style={{display: "flex", alignItems: "center"}}
+              autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
               How this word should be transcribed (leave empty to use the word itself)
