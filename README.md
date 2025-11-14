@@ -11,15 +11,17 @@ A production-quality AI Voice Keyboard web application that transforms speech in
 - **Settings**: Configure language and transcription preferences
 - **Clean UI**: Minimalist design with ShadCN UI components and Tailwind v4
 
-## Tech Stack
+
+## 🛠️ Tech Stack
 
 - **Framework**: Next.js 16 (App Router)
-- **UI**: ShadCN UI with Notebook theme
+- **UI**: ShadCN UI (customized) + Tailwind CSS v4
 - **Styling**: Tailwind CSS v4
 - **Database**: PostgreSQL with Prisma ORM
 - **Authentication**: NextAuth.js
-- **AI Transcription**: Amazon Transcribe
-- **Hosting**: Railway (recommended)
+- **Transcription APIs**: Whisper (FastAPI, self-hosted), Deepgram, AssemblyAI, Groq Whisper
+- **AI Formatting**: Groq, OpenAI, Local LLM (Ollama)
+- **Hosting**: Railway (recommended), Docker, AWS EC2 (for Whisper)
 
 ## Getting Started
 
@@ -45,7 +47,8 @@ Create a `.env.local` file:
 
 │   ├── (auth)/          # Authentication pages
 
-# AI Voice Keyboard
+
+# AVO
 
 Real-time, production-grade voice-to-text app with multi-service transcription, AI formatting, and custom dictionary. Built with Next.js 16, FastAPI, and PostgreSQL.
 
@@ -107,22 +110,96 @@ WHISPER_API_KEY="your-whisper-api-key"
 DEEPGRAM_API_KEY="your-deepgram-key"
 ASSEMBLYAI_API_KEY="your-assemblyai-key"
 
-# AI Formatting
+│   ├── auth.ts          # NextAuth configuration
+
+# AI Voice Keyboard
+
+
+Production-grade, real-time voice-to-text app with multi-service transcription, AI formatting, and custom dictionary. Built with Next.js 16, FastAPI, and PostgreSQL.
+
+---
+
+## 🧪 Advanced Techniques & Algorithms
+
+AVO leverages state-of-the-art techniques inspired by the Wispr Flow research paper to deliver highly accurate, real-time transcription:
+
+- **Audio Buffer Overlap**: 5-second audio chunks with 2-second overlap to preserve context and prevent word loss at chunk boundaries.
+- **Hash-Based Duplicate Detection**: Uses hashing of word sequences to detect and merge overlapping or repeated transcript segments across audio chunks.
+- **Smart Transcript Merging**: Aligns and merges partial results from streaming APIs, removing duplicates and ensuring seamless, incremental output.
+- **Longest-Match Dictionary Replacement**: Applies user-defined word/phrase substitutions, sorted by length, for maximum accuracy.
+- **Streaming Architecture**: Real-time chunked audio upload and processing, with low-latency feedback.
+- **AI Post-Processing**: Optional formatting with Groq, OpenAI, or local LLM for bullet points, grammar, and structure.
+
+See [`docs/WHISPERFLOW_MODEL_ANALYSIS.md`](./docs/WHISPERFLOW_MODEL_ANALYSIS.md) and [`docs/WISPR_FLOW_COMPARISON.md`](./docs/WISPR_FLOW_COMPARISON.md) for technical details.
+
+---
+
+
+## ✨ Features
+
+- **Multi-Service Transcription**: Whisper (self-hosted FastAPI), Deepgram, AssemblyAI, Groq Whisper (Groq API)
+- **AI Formatting**: Groq, OpenAI, or local LLM for bullet points, grammar, and smart formatting
+- **Custom Dictionary**: User-defined word/phrase substitutions for accuracy
+- **Authentication**: NextAuth.js (email/password)
+- **Transcription History**: Search, copy, and manage past transcriptions
+- **Settings**: Choose provider, manage API keys, and formatting preferences
+- **Modern UI**: ShadCN + Tailwind v4, mobile-first, accessible
+- **Security**: API key encryption, rate limiting, CORS, and protected routes
+
+---
+
+## 🏗️ Architecture
+
+- **Next.js 16 App Router**: Main web app, API, and UI
+- **Whisper Service (FastAPI)**: Streaming, chunked transcription with buffer overlap
+- **Database**: PostgreSQL + Prisma (users, transcriptions, dictionary, settings)
+- **AI Formatting**: Groq, OpenAI, or local LLM (Ollama)
+
+All transcription services are routed through `/api/transcribe/stream` with a unified API. See [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) for a full architecture and workflow breakdown.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 20+, Yarn
+- Python 3.10+ (for Whisper service)
+- PostgreSQL (local or Railway)
+
+### 1. Install dependencies
+
+```bash
+cd ai-voice-keyboard
+yarn install
+```
+
+### 2. Set up environment variables
+
+Create `.env.local`:
+
+```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/ai_voice_keyboard"
+
+# Auth
+NEXTAUTH_SECRET="your-secret-key"
+NEXTAUTH_URL="http://localhost:3000"
+
+# Transcription Services
+WHISPER_SERVICE_URL="http://localhost:8000"
+WHISPER_API_KEY="your-whisper-api-key"
+DEEPGRAM_API_KEY="your-deepgram-key"
+ASSEMBLYAI_API_KEY="your-assemblyai-key"
 GROQ_API_KEY="your-groq-key"
 OPENAI_API_KEY="your-openai-key"
 OLLAMA_URL="http://localhost:11434"
-
-# AWS (optional fallback)
-AWS_REGION="us-east-1"
-AWS_ACCESS_KEY_ID=""
-AWS_SECRET_ACCESS_KEY=""
 ```
 
 ### 3. Database setup
 
 ```bash
 yarn prisma generate
-│   └── layout/          # Layout components
+---
 ```
 
 ### 4. Start services
@@ -144,17 +221,72 @@ python app.py
 ## 🗂️ Project Structure
 
 ```
-├── lib/
-│   ├── auth.ts          # NextAuth configuration
-│   ├── prisma.ts        # Prisma client
-│   ├── transcribe.ts    # Amazon Transcribe client
-│   └── audio-processor.ts # Audio processing utilities
-└── prisma/
-    └── schema.prisma    # Database schema
+
+├── app/                # Next.js app router, API, pages
+├── components/         # UI and feature components
+├── lib/                # Service integrations, utils
+├── prisma/             # DB schema, migrations
+├── whisper-service/    # FastAPI microservice (Python)
+├── types/              # TypeScript types
 ```
 
 ---
 
+
+## 🧠 Key Concepts
+
+- **Audio Pipeline**: 5s WebM chunks, 2s buffer overlap, server-side merging
+- **Service Routing**: `/api/transcribe/stream` proxies to selected backend (Whisper, Deepgram, AssemblyAI, Groq Whisper)
+- **AI Formatting**: Optional, user-selectable, always falls back to raw transcript
+- **Dictionary**: Longest-match, word/phrase replacement, user-specific
+- **API Key Security**: Encrypted at rest, never sent to client
+
+---
+
+## 🛠️ Development
+
+- **yarn dev**: Start Next.js app
+- **python app.py**: Start Whisper service
+- **yarn prisma studio**: DB browser
+- **yarn prisma migrate dev**: Run migrations
+
+See [`docs/`](./docs/) for advanced guides, deployment, and troubleshooting.
+
+---
+
+
+## 🏭 Deployment
+
+- **Railway (recommended)**: One-click deploy for app and DB
+- **Whisper Service**: Deploy separately (Docker, EC2, Railway)
+- **Environment**: Set all required variables in Railway dashboard
+
+See [`docs/deployment/RAILWAY_DEPLOYMENT.md`](./docs/deployment/RAILWAY_DEPLOYMENT.md) for full instructions.
+
+---
+
+## 🔒 Security & Best Practices
+
+- API keys encrypted (AES-256-CBC)
+- All API routes (except health) require auth
+- Rate limiting on transcription endpoints
+- CORS restricted in production
+- Never expose secrets to client
+
+---
+
+## 📚 Documentation
+
+- [AI Post-Processing Plan](./docs/AI_POST_PROCESSING_PLAN.md)
+- [Whisper Service](./whisper-service/README.md)
+- [Deployment Guide](./docs/deployment/RAILWAY_DEPLOYMENT.md)
+- [Troubleshooting](./docs/troubleshooting/500_ERROR_FIX.md)
+
+---
+
+## License
+
+MIT
 ## 🧠 Key Concepts
 
 - **Audio Pipeline**: 5s WebM chunks, 2s buffer overlap, server-side merging
