@@ -40,7 +40,7 @@
 
 ```env
 AI_FORMATTER_PROVIDER=grok
-GROK_API_KEY=your-grok-api-key-here
+GROQ_API_KEY=your-grok-api-key-here
 ```
 
 **For Local Development:**
@@ -48,7 +48,7 @@ Create `.env.local` file:
 
 ```env
 AI_FORMATTER_PROVIDER=grok
-GROK_API_KEY=your-grok-api-key-here
+GROQ_API_KEY=your-grok-api-key-here
 ```
 
 ### Step 2: Deploy
@@ -82,14 +82,14 @@ Here are three points:
 ### Change Provider
 
 Set `AI_FORMATTER_PROVIDER` environment variable:
-- `grok` - Use Grok API (default)
+- `groq` - Use Grok API (default)
 - `openai` - Use OpenAI GPT-4o-mini
 - `local` - Use local Ollama
 
 ### Disable AI Formatting
 
 If you want to disable AI formatting temporarily:
-- Remove `GROK_API_KEY` (or `OPENAI_API_KEY`) from environment variables
+- Remove `GROQ_API_KEY` (or `OPENAI_API_KEY`) from environment variables
 - The system will automatically fallback to raw transcripts
 
 ## 📝 What Happens Now
@@ -119,7 +119,7 @@ If you want to disable AI formatting temporarily:
 
 ## 🔄 Next Steps
 
-1. ✅ Add your Grok API key to environment variables
+1. ✅ Add your Groq API key to environment variables
 2. ✅ Test the formatting with sample speech
 3. ✅ Monitor costs and quality
 4. ✅ Adjust prompts if needed (in `lib/ai-formatter.ts`)
@@ -128,7 +128,7 @@ If you want to disable AI formatting temporarily:
 
 ### AI Formatting Not Working?
 
-1. **Check API key**: Ensure `GROK_API_KEY` is set correctly
+1. **Check API key**: Ensure `GROQ_API_KEY` is set correctly
 2. **Check provider**: Ensure `AI_FORMATTER_PROVIDER=grok` is set
 3. **Check logs**: Look for error messages in server logs
 4. **Fallback**: System will use raw transcript if formatting fails
@@ -166,5 +166,4 @@ The system will automatically:
 - Improve capitalization
 - Add proper formatting
 
-All you need to do is add your Grok API key! 🚀
-
+All you need to do is add your Groq API key! 🚀

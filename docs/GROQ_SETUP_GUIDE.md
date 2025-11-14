@@ -97,4 +97,3 @@ The save button is at the **bottom of the AI Formatter Settings card**. Make sur
 ## 🎉 You're All Set!
 
 Your transcription system now uses Groq API for fast AI formatting, just like Wispr Flow!
-

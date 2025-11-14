@@ -13,11 +13,20 @@ docs/
 ├── troubleshooting/     # Troubleshooting guides
 │   └── 500_ERROR_FIX.md         # 500 error fixes and debugging
 │
-└── whisper-service/     # Whisper service documentation
-    ├── QUICK_START.md           # Quick start guide
-    ├── DEPLOYMENT_GUIDE.md       # Deployment guide
-    ├── RAILWAY_SETUP.md         # Railway setup for Whisper service
-    └── SECURITY_FIXES.md        # Security fixes and best practices
+├── whisper-service/     # Whisper service documentation
+│   ├── QUICK_START.md           # Quick start guide
+│   ├── DEPLOYMENT_GUIDE.md       # Deployment guide
+│   ├── RAILWAY_SETUP.md         # Railway setup for Whisper service
+│   └── SECURITY_FIXES.md        # Security fixes and best practices
+│
+├── AI_POST_PROCESSING_PLAN.md      # AI post-processing implementation plan
+├── ASSESSMENT_REVIEW.md           # Assessment review and codebase analysis
+├── GROQ_SETUP_GUIDE.md           # Groq API setup guide
+├── IMPLEMENTATION_SUMMARY.md       # AI post-processing implementation summary
+├── SETTINGS_IMPLEMENTATION_SUMMARY.md # Settings UI implementation summary
+├── START_WHISPER_SERVICE.md       # Starting the Whisper service guide
+├── WHISPERFLOW_MODEL_ANALYSIS.md  # WhisperFlow model analysis
+└── WISPR_FLOW_COMPARISON.md      # Wispr Flow comparison analysis
 ```
 
 ## 🚀 Quick Links
@@ -26,6 +35,14 @@ docs/
 - [Main README](../README.md) - Project overview and setup
 - [Whisper Service Quick Start](./whisper-service/QUICK_START.md) - Start Whisper service locally
 - [Whisper Service README](../whisper-service/README.md) - Complete Whisper service documentation
+
+### Implementation Guides
+- [AI Post-Processing Plan](./AI_POST_PROCESSING_PLAN.md) - AI formatting implementation plan
+- [Assessment Review](./ASSESSMENT_REVIEW.md) - Codebase assessment review
+- [Groq API Setup](./GROQ_SETUP_GUIDE.md) - Groq API configuration guide
+- [Implementation Summary](./IMPLEMENTATION_SUMMARY.md) - AI post-processing implementation summary
+- [Settings Implementation](./SETTINGS_IMPLEMENTATION_SUMMARY.md) - Settings UI implementation summary
+- [Starting Whisper Service](./START_WHISPER_SERVICE.md) - Whisper service startup guide
 
 ### Deployment
 - [Railway Deployment Guide](./deployment/RAILWAY_DEPLOYMENT.md) - Complete deployment guide

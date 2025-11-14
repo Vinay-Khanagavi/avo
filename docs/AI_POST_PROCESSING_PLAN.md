@@ -328,7 +328,7 @@ function buildFormattingPrompt(transcript: string, options: FormattingOptions): 
   const instructions: string[] = []
   
   if (options.detectBulletPoints !== false) {
-    instructions.push('- Convert the word "point" (when used to indicate a list item) into bullet points (•)')
+    instructions.push('- Convert word "point" (when used to indicate a list item) into bullet points (•)')
     instructions.push('- Detect when user wants a list and format accordingly')
   }
   
@@ -357,9 +357,9 @@ function buildFormattingPrompt(transcript: string, options: FormattingOptions): 
 ${instructions.join('\n')}
 
 **Important:** 
-- Preserve the original meaning and content
+- Preserve original meaning and content
 - Only improve formatting, grammar, and structure
-- Do not add content that wasn't in the original
+- Do not add content that wasn't in original
 - Convert formatting commands (like "point") into actual formatting
 
 Transcript to format:
@@ -546,4 +546,3 @@ After implementation, you should be able to:
 - **Privacy:** Grok/OpenAI API sends data to their servers. For privacy-sensitive use cases, consider local LLM.
 - **Latency:** AI formatting adds ~200-500ms latency. Consider async processing for better UX.
 - **Fallback:** Always fallback to raw transcript if formatting fails - never break the transcription flow.
-

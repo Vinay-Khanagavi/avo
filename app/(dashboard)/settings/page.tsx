@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { ServiceSelector, TranscriptionService } from "@/components/dictation/service-selector"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Snackbar, useSnackbar } from "@/components/ui/snackbar"
 
 export default function SettingsPage() {
   const [language, setLanguage] = useState("en-US")
@@ -31,6 +32,9 @@ export default function SettingsPage() {
   const [improveCapitalization, setImproveCapitalization] = useState(true)
   const [addFormatting, setAddFormatting] = useState(true)
   const [loading, setLoading] = useState(false)
+  
+  // Snackbar state
+  const { snackbar, showSnackbar, hideSnackbar } = useSnackbar()
 
   // Load settings from localStorage and API on mount
   useEffect(() => {
@@ -138,16 +142,16 @@ export default function SettingsPage() {
       
       if (response.ok) {
         const result = await response.json()
-        alert("Settings saved successfully!")
+        showSnackbar("Settings saved successfully!", "success")
         // Reload settings to ensure UI is in sync
         await loadAISettings()
       } else {
         const error = await response.json().catch(() => ({ error: "Unknown error" }))
-        alert(`Failed to save settings: ${error.error || "Unknown error"}`)
+        showSnackbar(`Failed to save settings: ${error.error || "Unknown error"}`, "error")
       }
     } catch (error) {
       console.error("Error saving settings:", error)
-      alert("Failed to save settings. Please try again.")
+      showSnackbar("Failed to save settings. Please try again.", "error")
     } finally {
       setLoading(false)
     }
@@ -163,11 +167,20 @@ export default function SettingsPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">
-            Configure your transcription preferences
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Settings</h1>
+            <p className="text-muted-foreground">
+              Configure your transcription preferences
+            </p>
+          </div>
+          <Button 
+            onClick={handleSave} 
+            className="h-11 px-6 shadow-sm bg-black text-white w-full sm:w-auto" 
+            disabled={loading}
+          >
+            {loading ? "Saving..." : "Save Settings"}
+          </Button>
         </div>
 
         <Card className="border-gray-300 shadow-md">
@@ -230,10 +243,6 @@ export default function SettingsPage() {
                 Choose your preferred transcription service. Each service has different accuracy and speed characteristics.
               </p>
             </div>
-
-            <Button onClick={handleSave} className="h-11 px-6 shadow-sm" disabled={loading}>
-              {loading ? "Saving..." : "Save Settings"}
-            </Button>
           </CardContent>
         </Card>
 
@@ -241,7 +250,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>AI Formatter Settings</CardTitle>
             <CardDescription>
-              Configure AI-powered text formatting (like Wispr Flow)
+              Configure AI-powered text formatting
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -378,10 +387,6 @@ export default function SettingsPage() {
                 </Label>
               </div>
             </div>
-            
-            <Button onClick={handleSave} className="h-11 px-6 shadow-sm w-full" disabled={loading}>
-              {loading ? "Saving..." : "Save AI Formatter Settings"}
-            </Button>
           </CardContent>
         </Card>
 
@@ -399,6 +404,14 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Snackbar */}
+      <Snackbar
+        message={snackbar.message}
+        type={snackbar.type}
+        isVisible={snackbar.isVisible}
+        onClose={hideSnackbar}
+      />
     </div>
   )
 }

@@ -64,7 +64,7 @@ If not set, a random key will be generated (but won't persist across restarts).
 
 1. Go to Settings page
 2. Select "Grok API" as provider
-3. Enter your Grok API key
+3. Enter your Groq API key
 4. Configure formatting options
 5. Click "Save Settings"
 6. Test transcription - it should use your API key!
@@ -81,7 +81,7 @@ If not set, a random key will be generated (but won't persist across restarts).
 ### For You (Personal Use):
 1. Go to Settings → AI Formatter Settings
 2. Select "Grok API"
-3. Enter your Grok API key
+3. Enter your Groq API key
 4. Enable formatting options you want
 5. Save!
 
@@ -100,7 +100,7 @@ If not set, a random key will be generated (but won't persist across restarts).
 - ✅ **Can disable AI formatting if needed**
 - ✅ **Customize formatting options**
 
-## 📝 Files Created/Modified
+## 📚 Files Created/Modified
 
 ### New Files:
 - `app/api/settings/route.ts` - Settings API endpoints
@@ -118,6 +118,5 @@ If not set, a random key will be generated (but won't persist across restarts).
 The implementation is complete! Just:
 1. Run the migration
 2. Go to Settings page
-3. Add your Grok API key
+3. Add your Groq API key
 4. Start transcribing with AI formatting! 🎉
-
