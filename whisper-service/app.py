@@ -58,6 +58,20 @@ async def startup_event():
         logger.info("Model pre-loading initiated in background")
     except Exception as e:
         logger.warning(f"Failed to pre-load model on startup: {e}. Will load on first request.")
+    
+    # Start background cleanup task
+    async def periodic_cleanup():
+        """Periodically clean up expired sessions."""
+        while True:
+            try:
+                await asyncio.sleep(60)  # Run every minute
+                cleanup_expired_sessions()
+            except Exception as e:
+                logger.error(f"Error in periodic cleanup: {e}")
+    
+    # Start cleanup task in background
+    asyncio.create_task(periodic_cleanup())
+    logger.info("Periodic session cleanup task started")
 
 # CORS configuration - restrict origins in production
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
@@ -215,6 +229,20 @@ def save_session(session_id: str, data: Dict):
 
 def delete_session(session_id: str):
     """Delete session data with error handling."""
+    # Clean up buffer audio file if it exists
+    try:
+        session = get_session(session_id)
+        if session and session.get("buffer_audio_path"):
+            buffer_path = session.get("buffer_audio_path")
+            if buffer_path and os.path.exists(buffer_path):
+                try:
+                    os.unlink(buffer_path)
+                    logger.debug(f"Cleaned up buffer file: {buffer_path}")
+                except OSError as e:
+                    logger.warning(f"Failed to cleanup buffer file {buffer_path}: {e}")
+    except Exception as e:
+        logger.warning(f"Error cleaning up buffer for session {session_id}: {e}")
+    
     if redis_client:
         try:
             redis_client.delete(f"session:{session_id}")
@@ -226,6 +254,86 @@ def delete_session(session_id: str):
     else:
         with sessions_lock:
             sessions.pop(session_id, None)
+
+
+def cleanup_expired_sessions():
+    """Clean up expired sessions based on last activity time."""
+    now = datetime.now(timezone.utc)
+    expired_count = 0
+    
+    if redis_client:
+        # Redis handles TTL automatically, but we can still clean up stale sessions
+        # by checking keys and their TTL
+        try:
+            # Get all session keys
+            session_keys = redis_client.keys("session:*")
+            for key in session_keys:
+                try:
+                    # Check TTL - if it's -1 (no expiry) or very old, check the session data
+                    ttl = redis_client.ttl(key)
+                    if ttl == -1:  # No expiry set, check manually
+                        data = redis_client.get(key)
+                        if data:
+                            session = json.loads(data)
+                            last_chunk_time = session.get("last_chunk_time")
+                            created_at = session.get("created_at")
+                            
+                            # Check if session is expired
+                            if last_chunk_time:
+                                last_time = datetime.fromisoformat(last_chunk_time.replace('Z', '+00:00'))
+                                if (now - last_time).total_seconds() > SESSION_TTL:
+                                    redis_client.delete(key)
+                                    expired_count += 1
+                                    logger.info(f"Cleaned up expired session: {key}")
+                            elif created_at:
+                                created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                                if (now - created_time).total_seconds() > SESSION_TTL:
+                                    redis_client.delete(key)
+                                    expired_count += 1
+                                    logger.info(f"Cleaned up expired session: {key}")
+                except Exception as e:
+                    logger.warning(f"Error checking session {key}: {e}")
+        except redis.RedisError as e:
+            logger.warning(f"Redis error during cleanup: {e}")
+    else:
+        # In-memory cleanup
+        with sessions_lock:
+            expired_sessions = []
+            for session_id, session in sessions.items():
+                last_chunk_time = session.get("last_chunk_time")
+                created_at = session.get("created_at")
+                
+                # Check if session is expired
+                expired = False
+                if last_chunk_time:
+                    try:
+                        last_time = datetime.fromisoformat(last_chunk_time.replace('Z', '+00:00'))
+                        if (now - last_time).total_seconds() > SESSION_TTL:
+                            expired = True
+                    except Exception as e:
+                        logger.warning(f"Error parsing last_chunk_time for session {session_id}: {e}")
+                
+                if not expired and created_at:
+                    try:
+                        created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        if (now - created_time).total_seconds() > SESSION_TTL:
+                            expired = True
+                    except Exception as e:
+                        logger.warning(f"Error parsing created_at for session {session_id}: {e}")
+                
+                if expired:
+                    expired_sessions.append(session_id)
+            
+            # Delete expired sessions
+            for session_id in expired_sessions:
+                delete_session(session_id)
+                expired_count += 1
+                logger.info(f"Cleaned up expired session: {session_id}")
+    
+    if expired_count > 0:
+        logger.info(f"Cleaned up {expired_count} expired session(s)")
+    
+    return expired_count
 
 
 def verify_api_key(api_key: Optional[str] = Header(None, alias="X-API-Key")):
@@ -306,10 +414,15 @@ async def create_session(
     request_obj=Depends(verify_api_key)
 ):
     """Create a new transcription session."""
-    # Check session limit
+    # Clean up expired sessions before checking limit
+    cleanup_expired_sessions()
+    
+    # Check session limit after cleanup
     if redis_client:
         try:
-            active_count = redis_client.dbsize()
+            # Count only session keys
+            session_keys = redis_client.keys("session:*")
+            active_count = len(session_keys)
         except redis.RedisError as e:
             logger.error(f"Redis error checking session count: {e}")
             with sessions_lock:
@@ -319,7 +432,22 @@ async def create_session(
             active_count = len(sessions)
     
     if active_count >= MAX_SESSIONS:
-        raise HTTPException(status_code=503, detail="Maximum sessions reached")
+        # Try one more aggressive cleanup
+        cleanup_expired_sessions()
+        # Recheck count
+        if redis_client:
+            try:
+                session_keys = redis_client.keys("session:*")
+                active_count = len(session_keys)
+            except redis.RedisError:
+                with sessions_lock:
+                    active_count = len(sessions)
+        else:
+            with sessions_lock:
+                active_count = len(sessions)
+        
+        if active_count >= MAX_SESSIONS:
+            raise HTTPException(status_code=503, detail="Maximum sessions reached")
     
     session_id = str(uuid.uuid4())
     session_data = {
@@ -656,10 +784,17 @@ async def finalize_session(session_id: str, request_obj=Depends(verify_api_key))
         
         final_transcript = session.get("transcript", "")
         
-        # Optionally delete session or mark as completed
+        # Mark as completed
         session["status"] = "completed"
         session["completed_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Save before deleting (in case client needs to retrieve it)
         save_session(session_id, session)
+        
+        # Delete session immediately after finalization to free up space
+        # Sessions are typically one-time use, so we can clean them up right away
+        delete_session(session_id)
+        logger.info(f"Finalized and cleaned up session: {session_id}")
         
         return {
             "session_id": session_id,
