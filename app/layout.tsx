@@ -21,6 +21,9 @@ const figtree = Figtree({
 export const metadata: Metadata = {
   title: "AVO - Speak to Type",
   description: "Transform your voice into accurate, well-formatted text instantly",
+  icons: {
+    icon: "/avo-logo.svg",
+  },
 };
 
 export default function RootLayout({
