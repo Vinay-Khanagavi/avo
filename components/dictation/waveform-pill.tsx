@@ -3,9 +3,12 @@
 import { useEffect, useRef } from "react"
 import { gsap } from "gsap"
 import { Chip } from "@/components/ui/chip"
+import { useSidebar } from "@/components/ui/sidebar"
 
 export function WaveformPill({ isSpeaking = false }: { isSpeaking?: boolean }) {
   const chipRef = useRef<HTMLDivElement>(null)
+  const { state } = useSidebar()
+  const leftPosition = state === "collapsed" ? '48px' : '256px'
 
   useEffect(() => {
     if (chipRef.current) {
@@ -35,7 +38,7 @@ export function WaveformPill({ isSpeaking = false }: { isSpeaking?: boolean }) {
   }, [])
 
   return (
-    <div className="fixed z-50 flex items-center justify-center pointer-events-none" style={{ bottom: '50px', left: '256px', right: 0 }}>
+    <div className="fixed z-50 flex items-center justify-center pointer-events-none transition-all duration-200" style={{ bottom: '50px', left: leftPosition, right: 0 }}>
       <div ref={chipRef}>
         <Chip variant="flat" className="px-4 py-2 bg-black text-white mx-auto">
           <div className={`wd_pill flex items-center gap-2 ${isSpeaking ? "is-speaking" : ""}`}>
