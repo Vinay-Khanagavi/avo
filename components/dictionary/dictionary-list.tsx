@@ -117,12 +117,21 @@ export function DictionaryList() {
       </div>
 
       <div className="space-y-3 sm:space-y-4">
-        <Input
-          placeholder="Search words..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full sm:max-w-sm border-2 border-gray-300 dark:border-gray-600 focus-visible:border-gray-400 dark:focus-visible:border-gray-500"
-        />
+        <div className="relative w-full sm:max-w-sm">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </span>
+          <input
+            type="text"
+            placeholder="Search words..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-transparent border-0 border-b-2 border-b-gray-300 focus:border-b-black outline-none transition-colors text-base placeholder:text-gray-400"
+          />
+        </div>
 
         {isLoading ? (
           <div className="flex justify-center py-8">
