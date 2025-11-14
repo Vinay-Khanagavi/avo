@@ -54,60 +54,56 @@ Real-time, production-grade voice-to-text app with multi-service transcription, 
 
 ---
 
+# AVO
+
+Production-grade, real-time voice-to-text app with multi-service transcription, AI formatting, and custom dictionary.
+
+---
+
+## 🧪 Advanced Techniques & Algorithms
+
+- **Audio Buffer Overlap**: 5s chunks with 2s overlap for context
+- **Hash-Based Duplicate Detection**: Merges overlapping/duplicate transcript segments
+- **Smart Transcript Merging**: Aligns and merges partial results for seamless output
+- **Longest-Match Dictionary Replacement**: User-defined substitutions, sorted by length
+- **Streaming Architecture**: Real-time chunked audio upload and processing
+- **AI Post-Processing**: Optional formatting with Groq, OpenAI, or local LLM
+
+---
+
 ## ✨ Features
 
-- **Multi-Service Transcription**: Whisper (self-hosted), Deepgram, AssemblyAI, and fallback to AWS Transcribe
-- **AI Formatting**: Groq, OpenAI, or local LLM for bullet points, grammar, and smart formatting
-- **Custom Dictionary**: User-defined word/phrase substitutions for accuracy
-- **Authentication**: NextAuth.js (email/password)
-- **Transcription History**: Search, copy, and manage past transcriptions
-- **Settings**: Choose provider, manage API keys, and formatting preferences
-- **Modern UI**: ShadCN + Tailwind v4, mobile-first, accessible
-- **Security**: API key encryption, rate limiting, CORS, and protected routes
+- Multi-service transcription: Whisper (FastAPI), Deepgram, AssemblyAI, Groq Whisper
+- AI formatting: Groq, OpenAI, or local LLM for bullet points, grammar, and structure
+- Custom dictionary: User-defined word/phrase substitutions
+- Authentication: NextAuth.js (email/password)
+- Transcription history: Search, copy, and manage past transcriptions
+- Settings: Choose provider, manage API keys, formatting preferences
+- Modern UI: ShadCN + Tailwind v4, mobile-first, accessible
+- Security: API key encryption, rate limiting, CORS, protected routes
+
+---
+
+## 🛠️ Tech Stack
+
+- Framework: Next.js 16 (App Router)
+- UI: ShadCN UI (customized) + Tailwind CSS v4
+- Database: PostgreSQL with Prisma ORM
+- Authentication: NextAuth.js
+- Transcription APIs: Whisper (FastAPI), Deepgram, AssemblyAI, Groq Whisper
+- AI Formatting: Groq, OpenAI, Local LLM (Ollama)
+- Hosting: Railway, Docker, AWS EC2 (for Whisper)
 
 ---
 
 ## 🏗️ Architecture
 
-- **Next.js 16 App Router**: Main web app, API, and UI
-- **Whisper Service (FastAPI)**: Streaming, chunked transcription with buffer overlap
-- **Database**: PostgreSQL + Prisma (users, transcriptions, dictionary, settings)
-- **AI Formatting**: Groq, OpenAI, or local LLM (Ollama)
+- Next.js 16 App Router: Main web app, API, and UI
+- Whisper Service (FastAPI): Streaming, chunked transcription with buffer overlap
+- Database: PostgreSQL + Prisma (users, transcriptions, dictionary, settings)
+- AI Formatting: Groq, OpenAI, or local LLM (Ollama)
 
-See [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) for a full architecture and workflow breakdown.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 20+, Yarn
-- Python 3.10+ (for Whisper service)
-- PostgreSQL (local or Railway)
-
-### 1. Install dependencies
-
-```bash
-cd ai-voice-keyboard
-yarn install
-```
-
-### 2. Set up environment variables
-
-Create `.env.local`:
-
-```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/ai_voice_keyboard"
-
-# Auth
-NEXTAUTH_SECRET="your-secret-key"
-NEXTAUTH_URL="http://localhost:3000"
-
-# Transcription Services
-WHISPER_SERVICE_URL="http://localhost:8000"
-WHISPER_API_KEY="your-whisper-api-key"
-DEEPGRAM_API_KEY="your-deepgram-key"
+All transcription services are routed through `/api/transcribe/stream` with a unified API.
 ASSEMBLYAI_API_KEY="your-assemblyai-key"
 
 │   ├── auth.ts          # NextAuth configuration
