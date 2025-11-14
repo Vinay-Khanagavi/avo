@@ -58,7 +58,7 @@ export function Sidebar() {
   const isCollapsed = state === "collapsed"
 
   return (
-    <ShadcnSidebar collapsible="icon" variant="sidebar">
+    <ShadcnSidebar collapsible="icon" variant="sidebar" className="z-50 relative">
       <SidebarHeader className="border-b">
         <div className="flex items-center justify-between p-2">
           <AVOLogo collapsed={isCollapsed} />

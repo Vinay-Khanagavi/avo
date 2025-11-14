@@ -1,3 +1,29 @@
+@keyframes gradient-bg {
+  0% {
+    opacity: 0.85;
+    transform: scale(1) rotate(0deg);
+    filter: blur(0px);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.04) rotate(2deg);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 0.95;
+    transform: scale(1.08) rotate(-2deg);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 0.85;
+    transform: scale(1) rotate(0deg);
+    filter: blur(0px);
+  }
+}
+.animate-gradient-bg {
+  animation: gradient-bg 7s ease-in-out infinite;
+  transition: opacity 0.5s;
+}
 @import "tailwindcss";
 @import "tw-animate-css";
 

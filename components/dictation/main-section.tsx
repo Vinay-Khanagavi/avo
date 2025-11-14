@@ -172,7 +172,16 @@ export function MainSection({
 
   return (
     <section ref={sectionRef} className="w-full pt-4 md:pt-20 px-0 md:px-4 relative pb-10 overflow-hidden dictation-main-offset">
-      <div className="max-w-4xl mx-auto">
+      {/* Gradient background for recording, covers only main content, not sidebar */}
+      {isRecording && (
+        <div
+          className="pointer-events-none fixed inset-0 z-30 animate-gradient-bg"
+          style={{
+            background: "radial-gradient(ellipse 120% 80% at 60% 60%, #ffe5d9 0%, #ffd4b3 40%, #e6e6fa 70%, #b0c4de 100%)"
+          }}
+        />
+      )}
+      <div className="max-w-4xl mx-auto relative z-40">
         {/* Tab Buttons */}
         <div className="flex flex-wrap gap-2 md:gap-3 justify-center mb-8 md:mb-12 px-4 md:px-0">
           {tabs.map((tab) => (
@@ -211,7 +220,7 @@ export function MainSection({
 
           {/* Input Area with Reset Button */}
           <div className="bg-white rounded-xl border border-gray-300 p-4 md:p-6 lg:p-8 shadow-sm relative overflow-visible">
-            {/* Recording background visuals removed as requested */}
+            {/* Gradient is now behind the display, not inside */}
             {/* Reset button, only show if transcript and interactive */}
             {isInteractive && transcript && setTranscript && (
               <div className="absolute top-3 right-3 z-20">
