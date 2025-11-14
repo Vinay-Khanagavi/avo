@@ -63,11 +63,17 @@ docs/
 - **500 Errors**: Database connection, migrations, Prisma issues
 - **Signup Errors**: Common signup problems and solutions
 - **Whisper Service**: Connection issues, API key problems
+- **AI Formatting**: Groq API setup and configuration issues
+- **Settings Management**: User settings persistence and API key storage
 
 ### Whisper Service
 - **Local Development**: Quick start guide for local setup
 - **Deployment**: Deploy Whisper service to AWS EC2 or Railway
 - **Security**: API key protection and security best practices
+- **Model Analysis**: WhisperFlow enhancements and performance optimizations
+
+### Feature Analysis
+- [Wispr Flow Comparison](./WISPR_FLOW_COMPARISON.md) - Detailed comparison with Wispr Flow features
 
 ## 🔍 Finding What You Need
 

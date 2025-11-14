@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
                     addFormatting: userSettings.addFormatting,
                   }, {
                     provider: userSettings.provider,
-                    apiKey: userSettings.provider === 'grok' ? userSettings.grokApiKey : 
+                    apiKey: userSettings.provider === 'groq' ? userSettings.groqApiKey : 
                             userSettings.provider === 'openai' ? userSettings.openaiApiKey : undefined,
                   })
                   
