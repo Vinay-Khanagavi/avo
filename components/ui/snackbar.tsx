@@ -101,7 +101,7 @@ export function Snackbar({
     <div
       ref={snackbarRef}
       className={cn(
-        "fixed bottom-15 right-40 z-50 flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg min-w-[300px] max-w-[500px]",
+        "fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg px-4 py-3 shadow-lg min-w-[300px] max-w-[500px]",
         type === "success"
           ? "bg-green-50 border border-green-200 text-green-900 dark:bg-green-950 dark:border-green-800 dark:text-green-100"
           : "bg-red-50 border border-red-200 text-red-900 dark:bg-red-950 dark:border-red-800 dark:text-red-100"

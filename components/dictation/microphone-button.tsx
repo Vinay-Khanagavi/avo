@@ -80,7 +80,6 @@ export function MicrophoneButton({
     } catch (err) {
       console.error("Error starting recording:", err)
       setError("Failed to start recording. Please check your microphone.")
-      showSnackbar("You need to turn on your microphone to start recording", "error")
       setHasPermission(false)
     }
   }
@@ -110,62 +109,51 @@ export function MicrophoneButton({
   }
 
   return (
-    <>
-      <Button
-        onClick={hasPermission === false ? () => {
-          setHasPermission(null)
-          setError("")
-          hasShownPermissionError.current = false
-          // Re-check permission
-          navigator.mediaDevices
-            .getUserMedia({ audio: true })
-            .then(() => setHasPermission(true))
-            .catch(() => {
-              setHasPermission(false)
-              setError("Microphone access denied. Please enable microphone permissions.")
-              showSnackbar("You need to turn on your microphone to start recording", "error")
-            })
-        } : handleClick}
-        disabled={disabled || hasPermission === null || hasPermission === false}
-        size="lg"
-        className={`w-full max-w-xs rounded-xl text-white hover:bg-black hover:opacity-100 ${
-          isRecording
-            ? "bg-destructive hover:bg-destructive"
-            : hasPermission === false
-            ? "bg-gray-400 cursor-not-allowed"
-            : "bg-black"
-        }`}
-      >
-        {hasPermission === null ? (
-          <>
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            Checking microphone...
-          </>
-        ) : hasPermission === false ? (
-          <>
-            <MicOff className="mr-2 h-5 w-5" />
-            Enable Microphone
-          </>
-        ) : isRecording ? (
-          <>
-            <MicOff className="mr-2 h-5 w-5" />
-            Stop Recording
-          </>
-        ) : (
-          <>
-            <Mic className="mr-2 h-5 w-5" />
-            Start Recording
-          </>
-        )}
-      </Button>
-
-      <Snackbar
-        message={snackbar.message}
-        type={snackbar.type}
-        isVisible={snackbar.isVisible}
-        onClose={hideSnackbar}
-      />
-    </>
+    <Button
+      onClick={hasPermission === false ? () => {
+        setHasPermission(null)
+        setError("")
+        // Re-check permission
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then(() => setHasPermission(true))
+          .catch(() => {
+            setHasPermission(false)
+            setError("Microphone access denied. Please enable microphone permissions.")
+          })
+      } : handleClick}
+      disabled={disabled || hasPermission === null || hasPermission === false}
+      size="lg"
+      className={`w-full max-w-xs rounded-xl text-white hover:bg-black hover:opacity-100 ${
+        isRecording
+          ? "bg-destructive hover:bg-destructive"
+          : hasPermission === false
+          ? "bg-gray-400 cursor-not-allowed"
+          : "bg-black"
+      }`}
+    >
+      {hasPermission === null ? (
+        <>
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          Checking microphone...
+        </>
+      ) : hasPermission === false ? (
+        <>
+          <MicOff className="mr-2 h-5 w-5" />
+          Enable Microphone
+        </>
+      ) : isRecording ? (
+        <>
+          <MicOff className="mr-2 h-5 w-5" />
+          Stop Recording
+        </>
+      ) : (
+        <>
+          <Mic className="mr-2 h-5 w-5" />
+          Start Recording
+        </>
+      )}
+    </Button>
   )
 }
 
