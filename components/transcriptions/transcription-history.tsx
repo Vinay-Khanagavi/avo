@@ -98,8 +98,8 @@ export function TranscriptionHistory() {
         </p>
       </div>
 
-      <div className="relative w-full sm:max-w-sm">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+      <div className="flex items-center w-full sm:max-w-sm border-b-2 border-b-gray-300 focus-within:border-b-black">
+        <span className="flex-shrink-0 pl-2 pr-2 text-gray-400">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -110,7 +110,9 @@ export function TranscriptionHistory() {
           placeholder="Search transcriptions..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 bg-transparent border-0 border-b-2 border-b-gray-300 focus:border-b-black outline-none transition-colors text-base placeholder:text-gray-400"
+          className="flex-1 bg-transparent border-0 py-2 pr-3 text-base outline-none placeholder:text-gray-400 min-w-0"
+          style={{ WebkitAppearance: 'none' }}
+          aria-label="Search transcriptions"
         />
       </div>
 
