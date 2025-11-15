@@ -63,10 +63,11 @@ export default function DictationPage() {
   }
 
   const handleStart = async () => {
-    setIsRecording(true)
-    setTranscript("")
-    sessionIdRef.current = null
-    pendingChunksRef.current = []
+  setIsRecording(true)
+  // Only clear transcript if starting a new session (not on stop)
+  setTranscript("")
+  sessionIdRef.current = null
+  pendingChunksRef.current = []
 
     try {
       // Fetch dictionary words for post-transcription replacement (no AI needed)
