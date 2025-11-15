@@ -118,29 +118,18 @@ export function MainSection({
     }
   }, [activeTab, isInteractive, setTranscript])
 
-  // Animate gradient background on recording state change
+  // Show/hide gradient background on recording state change (no movement animation)
   useEffect(() => {
     if (gradientRef.current) {
       if (isRecording) {
-        gsap.fromTo(gradientRef.current, 
-          { opacity: 0 }, 
-          { opacity: 1, duration: 1.2, ease: "power2.out" }
-        )
-        gsap.to(gradientRef.current, {
-          backgroundPosition: "200% 200%",
-          duration: 20,
-          ease: "none",
-          repeat: -1,
-          yoyo: true
-        })
+        gsap.to(gradientRef.current, { opacity: 1, duration: 0.3 })
       } else {
-        gsap.killTweensOf(gradientRef.current)
-        gsap.to(gradientRef.current, 
-          { opacity: 0, duration: 0.3, ease: "power2.in" }
-        )
+        gsap.to(gradientRef.current, { opacity: 0, duration: 0.3 })
       }
     }
   }, [isRecording])
+
+
 
   // Spacebar keyboard handler - use ref to persist across renders
   const isSpacebarPressedRef = useRef(false)
@@ -197,15 +186,13 @@ export function MainSection({
 
   return (
     <section ref={sectionRef} className="w-full pt-4 md:pt-20 px-0 md:px-4 relative pb-10 overflow-hidden dictation-main-offset">
-      {/* Gradient background for recording, covers only main content, not sidebar */}
+      {/* Static gradient background for recording */}
       {isRecording && (
         <div
           ref={gradientRef}
           className="pointer-events-none fixed inset-0 z-30"
           style={{
             background: "radial-gradient(ellipse 120% 80% at 60% 60%, #ffe5d9 0%, #ffd4b3 40%, #e6e6fa 70%, #b0c4de 100%)",
-            backgroundSize: "200% 200%",
-            backgroundPosition: "0% 0%",
             opacity: 0
           }}
         />
