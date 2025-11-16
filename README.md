@@ -447,20 +447,3 @@ Whisper models download automatically on first use. Ensure:
 ## License
 
 MIT License - see LICENSE file for details.
-
----
-
-## Contributing
-
-Contributions are welcome. Please:
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request with clear description
-
----
-
-## Support
-
-For issues and questions:
-- GitHub Issues: Report bugs and feature requests
-- Documentation: See `docs/` directory for detailed guides
