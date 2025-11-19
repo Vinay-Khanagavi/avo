@@ -74,7 +74,7 @@ export function createAudioSlicer(
   mediaRecorder: MediaRecorder,
   onChunk: (chunk: Blob) => void
 ): () => void {
-  const CHUNK_DURATION_MS = 1000
+  const CHUNK_DURATION_MS = 5000 // 5-second chunks for cost efficiency at scale
 
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) {

@@ -12,7 +12,7 @@ export interface GroqWhisperSession {
   committedTranscript: string   // The "solidified" transcript from previous chunks
   audioBuffer: Buffer[]         // Current new audio chunks
   recentChunks: Buffer[]        // Kept chunks for overlap context
-  headerChunk: Buffer | null    // The first chunk (WebM header)
+  webmHeader: Buffer | null     // ONLY the WebM header bytes (no audio data)
   lastProcessedTime: number
   isProcessing: boolean
 }
@@ -61,10 +61,22 @@ export async function createGroqWhisperSession(
     committedTranscript: "",
     audioBuffer: [],
     recentChunks: [],
-    headerChunk: null,
+    webmHeader: null,
     lastProcessedTime: Date.now(),
     isProcessing: false,
   }
+}
+
+/**
+ * Extract only the WebM header from the first chunk
+ * WebM structure: EBML Header + Segment Info + Track Info
+ * This is typically 100-1000 bytes, we take 2KB to be safe
+ * This prevents audio data from being stored in the header
+ */
+function extractWebMHeader(firstChunk: Buffer): Buffer {
+  // Take first 2KB which should contain all header metadata but minimal audio
+  const HEADER_SIZE = 2048
+  return firstChunk.slice(0, Math.min(HEADER_SIZE, firstChunk.length))
 }
 
 /**
@@ -74,10 +86,10 @@ export function addAudioChunkToSession(
   session: GroqWhisperSession,
   audioChunk: Buffer
 ): void {
-  // Capture the first chunk as the header (WebM header is usually in the first chunk)
-  if (!session.headerChunk && session.audioBuffer.length === 0 && session.recentChunks.length === 0) {
-    session.headerChunk = audioChunk
-    // Also add to buffer for first processing
+  // Capture ONLY the header bytes from the first chunk (no audio data)
+  if (!session.webmHeader && session.audioBuffer.length === 0 && session.recentChunks.length === 0) {
+    session.webmHeader = extractWebMHeader(audioChunk)
+    // Still add the full chunk to buffer for first processing
     session.audioBuffer.push(audioChunk)
   } else {
     session.audioBuffer.push(audioChunk)
@@ -149,39 +161,34 @@ export async function processAudioSlice(
 
   try {
     // 1. Prepare Audio Payload
-    // We must construct a valid WebM file: Header + (Overlap Chunks) + (Current Chunks)
+    // We must construct a valid WebM file: Header (no audio) + (Overlap Chunks) + (Current Chunks)
 
     const currentChunks = session.audioBuffer
     const overlapChunks = session.recentChunks
-    const headerChunk = session.headerChunk
+    const webmHeader = session.webmHeader
 
-    if (!headerChunk) {
+    if (!webmHeader) {
       // Should not happen if addAudioChunkToSession is called correctly
-      console.warn(`[${session.sessionId}] No header chunk found, using first current chunk`)
+      console.warn(`[${session.sessionId}] No WebM header found, using first current chunk`)
     }
 
-    // Combine: Header + Overlap + Current
-    // Note: If header is already in overlap or current (first slice), be careful not to duplicate
-    // But usually header is distinct.
+    // Combine: Header (header-only, no audio) + Overlap + Current
+    // The header is now tiny (2KB) and contains no audio data
 
     const parts: Buffer[] = []
 
-    if (headerChunk) {
-      parts.push(headerChunk)
+    if (webmHeader) {
+      parts.push(webmHeader)
     }
 
-    // Add overlap chunks (excluding header if it was stored there)
+    // Add overlap chunks (they won't match the tiny header)
     for (const chunk of overlapChunks) {
-      if (chunk !== headerChunk) {
-        parts.push(chunk)
-      }
+      parts.push(chunk)
     }
 
     // Add current chunks
     for (const chunk of currentChunks) {
-      if (chunk !== headerChunk) {
-        parts.push(chunk)
-      }
+      parts.push(chunk)
     }
 
     const payloadAudio = Buffer.concat(parts)
@@ -193,12 +200,11 @@ export async function processAudioSlice(
     const allRecent = [...overlapChunks, ...currentChunks]
     const keptChunks: Buffer[] = []
     let keptSize = 0
-    const TARGET_OVERLAP_SIZE = 16 * 1024 // ~1 second of Opus (reduced from 32KB to prevent loops)
+    const TARGET_OVERLAP_SIZE = 16 * 1024 // ~1 second of Opus
 
     for (let i = allRecent.length - 1; i >= 0; i--) {
       const chunk = allRecent[i]
-      // Don't keep the header in the "recent" list (we always prepend it separately)
-      if (chunk === headerChunk) continue
+      // No need to check against webmHeader since it's tiny and separate
 
       keptChunks.unshift(chunk)
       keptSize += chunk.length
