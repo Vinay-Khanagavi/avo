@@ -14,7 +14,11 @@ import {
 import {
   createGroqWhisperSession,
   transcribeGroqWhisperChunk,
-  finalizeGroqWhisperSession
+  finalizeGroqWhisperSession,
+  GroqWhisperSession,
+  addAudioChunkToSession,
+  processAudioSlice,
+  shouldProcessSlice
 } from "@/lib/groq-whisper-service"
 
 
@@ -24,6 +28,9 @@ const WHISPER_API_KEY = process.env.WHISPER_API_KEY || ""
 // In-memory session storage for Deepgram and AssemblyAI
 // In production, consider using Redis or a database
 const sessionStorage = new Map<string, { transcript: string; service: string; prompt?: string }>()
+
+// Dedicated storage for Groq Whisper sessions (with full session state)
+const groqSessionStorage = new Map<string, GroqWhisperSession>()
 
 /**
  * Create a new transcription session
@@ -116,25 +123,42 @@ export async function POST(request: NextRequest) {
           }
         } else if (service === "groq-whisper") {
           try {
-            const sessionData = sessionStorage.get(sessionId)
-            const existingTranscript = sessionData?.transcript || ""
-            const prompt = sessionData?.prompt
+            // Get the Groq session
+            const groqSession = groqSessionStorage.get(sessionId)
 
-            const result = await transcribeGroqWhisperChunk(
-              sessionId,
-              audioBuffer,
-              existingTranscript,
-              customApiKey || undefined,
-              prompt
-            )
+            if (!groqSession) {
+              return NextResponse.json(
+                { error: "Session not found. Please create a new session." },
+                { status: 404 }
+              )
+            }
 
-            // Update session storage with raw transcript
-            sessionStorage.set(sessionId, {
-              transcript: result.transcript,
-              service: "groq-whisper",
-            })
+            // Add audio chunk to the session buffer
+            addAudioChunkToSession(groqSession, audioBuffer)
 
-            return NextResponse.json(result)
+            // Check if we should process this slice
+            if (shouldProcessSlice(groqSession)) {
+              const result = await processAudioSlice(
+                groqSession,
+                customApiKey || undefined
+              )
+
+              // Update sessionStorage with the accumulated transcript for database save
+              sessionStorage.set(sessionId, {
+                transcript: result.transcript,
+                service: "groq-whisper",
+              })
+
+              return NextResponse.json(result)
+            } else {
+              // Not ready to process yet, return current state
+              return NextResponse.json({
+                session_id: sessionId,
+                transcript: groqSession.accumulatedTranscript,
+                incremental: "",
+                is_final: false,
+              })
+            }
           } catch (error: any) {
             console.error("Groq Whisper transcription error:", error)
             return NextResponse.json(
@@ -175,8 +199,8 @@ export async function POST(request: NextRequest) {
           } catch (error: any) {
             if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
               return NextResponse.json(
-                { 
-                  error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
+                {
+                  error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py"
                 },
                 { status: 503 }
               )
@@ -236,11 +260,15 @@ export async function POST(request: NextRequest) {
       } else if (service === "groq-whisper") {
         try {
           const session = await createGroqWhisperSession(body.prompt)
+
+          // Store in both maps
+          groqSessionStorage.set(session.sessionId, session)
           sessionStorage.set(session.sessionId, {
             transcript: "",
             service: "groq-whisper",
             prompt: body.prompt,
           })
+
           return NextResponse.json({ session_id: session.sessionId, status: "created" })
         } catch (error: any) {
           console.error("Groq Whisper session creation error:", error)
@@ -271,8 +299,8 @@ export async function POST(request: NextRequest) {
         } catch (error: any) {
           if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
             return NextResponse.json(
-              { 
-                error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
+              {
+                error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py"
               },
               { status: 503 }
             )
@@ -359,32 +387,54 @@ export async function POST(request: NextRequest) {
         }
       } else if (service === "groq-whisper") {
         try {
-          const result = await finalizeGroqWhisperSession(sessionId)
-          const finalTranscript = sessionData?.transcript || ""
+          // Get the Groq session
+          const groqSession = groqSessionStorage.get(sessionId)
 
-          // Save final transcript to database
-          if (finalTranscript.trim()) {
-            try {
-              const { prisma } = await import("@/lib/prisma")
-              await prisma.transcription.create({
-                data: {
-                  text: finalTranscript.trim(),
-                  userId: session.user.id,
-                },
-              })
-            } catch (dbError: any) {
-              console.error("Failed to save transcription to database:", dbError)
+          if (groqSession) {
+            // Finalize the session
+            const result = await finalizeGroqWhisperSession(
+              groqSession,
+              body.customApiKey || undefined
+            )
+
+            const finalTranscript = result.transcript
+
+            // Save final transcript to database
+            if (finalTranscript.trim()) {
+              try {
+                const { prisma } = await import("@/lib/prisma")
+                await prisma.transcription.create({
+                  data: {
+                    text: finalTranscript.trim(),
+                    userId: session.user.id,
+                  },
+                })
+              } catch (dbError: any) {
+                console.error("Failed to save transcription to database:", dbError)
+              }
             }
+
+            // Clean up both session storages
+            groqSessionStorage.delete(sessionId)
+            sessionStorage.delete(sessionId)
+
+            return NextResponse.json({
+              session_id: sessionId,
+              transcript: finalTranscript,
+              is_final: true,
+            })
+          } else {
+            // Session not found, just return what we have in sessionStorage
+            const finalTranscript = sessionData?.transcript || ""
+
+            sessionStorage.delete(sessionId)
+
+            return NextResponse.json({
+              session_id: sessionId,
+              transcript: finalTranscript,
+              is_final: true,
+            })
           }
-
-          // Clean up session
-          sessionStorage.delete(sessionId)
-
-          return NextResponse.json({
-            session_id: sessionId,
-            transcript: finalTranscript,
-            is_final: true,
-          })
         } catch (error: any) {
           console.error("Groq Whisper finalize error:", error)
           return NextResponse.json(
@@ -434,8 +484,8 @@ export async function POST(request: NextRequest) {
         } catch (error: any) {
           if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
             return NextResponse.json(
-              { 
-                error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py" 
+              {
+                error: "Whisper service is not running. Please start it with: cd whisper-service && python app.py"
               },
               { status: 503 }
             )
@@ -448,7 +498,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error: any) {
     console.error("Stream transcription API error:", error)
-    
+
     // Handle Prisma errors
     if (error && typeof error === 'object' && 'code' in error) {
       const prismaError = error as { code?: string; message?: string }
@@ -460,17 +510,17 @@ export async function POST(request: NextRequest) {
         )
       }
     }
-    
+
     // Handle network errors
     if (error.code === "ECONNREFUSED" || error.message?.includes("fetch failed")) {
       return NextResponse.json(
-        { 
-          error: "Whisper service is not available. Please try again later." 
+        {
+          error: "Whisper service is not available. Please try again later."
         },
         { status: 503 }
       )
     }
-    
+
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

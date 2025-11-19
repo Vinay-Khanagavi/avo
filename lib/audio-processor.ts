@@ -66,77 +66,26 @@ export function createMediaRecorder(stream: MediaStream): MediaRecorder {
   return new MediaRecorder(stream, options)
 }
 
-
+/**
+ * Slice audio into 5-second chunks and stream them to server
+ * Server will handle accumulation and creating valid media files
+ */
 export function createAudioSlicer(
   mediaRecorder: MediaRecorder,
   onChunk: (chunk: Blob) => void
 ): () => void {
-  const CHUNK_DURATION_MS = 5000 // 5 seconds per slice
-  const firstChunkRef: Blob[] = [] // Store first chunk (has headers)
-  const accumulatedChunks: Blob[] = []
-  let chunkCount = 0
+  const CHUNK_DURATION_MS = 5000
 
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
-      chunkCount++
-
-      if (chunkCount === 1) {
-        // First chunk has WebM headers - send immediately for real-time processing
-        firstChunkRef.push(event.data)
-        accumulatedChunks.push(event.data)
-
-        // Send first chunk immediately if it has sufficient audio data (not just headers)
-        // WebM headers are typically ~100-500 bytes, so 4KB ensures we have real audio
-        if (event.data.size > 4096) {
-          console.log(`[AudioProcessor] First chunk ready: ${event.data.size} bytes`)
-          onChunk(event.data)
-        } else {
-          console.log(`[AudioProcessor] First chunk too small (${event.data.size} bytes), waiting for more data`)
-        }
-      } else {
-        // Subsequent chunks are fragments - combine with first chunk to create complete WebM
-        accumulatedChunks.push(event.data)
-
-        // Create complete segment by combining first chunk (with headers) + fragments
-        // This creates a valid WebM file that ffmpeg can process
-        const completeSegment = new Blob(accumulatedChunks, { type: 'audio/webm;codecs=opus' })
-
-        // Send immediately for streaming transcription with proper size threshold
-        // Ensure we have enough audio data to transcribe (not just headers)
-        if (completeSegment.size > 4096) {
-          console.log(`[AudioProcessor] Sending chunk ${chunkCount}: ${completeSegment.size} bytes (${accumulatedChunks.length} fragments)`)
-          onChunk(completeSegment)
-        } else {
-          console.log(`[AudioProcessor] Chunk ${chunkCount} too small (${completeSegment.size} bytes), accumulating more data`)
-        }
-
-        // Keep only the last fragment for next iteration (for continuity)
-        // This maintains the buffer overlap on client side too
-        if (accumulatedChunks.length > 1) {
-          // Keep first chunk (headers) + last fragment
-          const lastFragment = accumulatedChunks[accumulatedChunks.length - 1]
-          accumulatedChunks.length = 0
-          accumulatedChunks.push(firstChunkRef[0])
-          accumulatedChunks.push(lastFragment)
-        }
-      }
+      console.log(`[AudioProcessor] Chunk: ${event.data.size} bytes`)
+      onChunk(event.data)
     }
   }
 
-  // Start recording with timeslice for automatic 5-second chunking
   mediaRecorder.start(CHUNK_DURATION_MS)
 
   return () => {
     mediaRecorder.stop()
-
-    // Send any remaining accumulated chunks when stopping
-    // This ensures the final slice is processed
-    if (accumulatedChunks.length > 0) {
-      const finalSegment = new Blob(accumulatedChunks, { type: 'audio/webm;codecs=opus' })
-      if (finalSegment.size > 0) {
-        onChunk(finalSegment)
-      }
-    }
   }
 }
-

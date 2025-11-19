@@ -10,9 +10,9 @@ export interface GroqWhisperSession {
   prompt?: string
   accumulatedTranscript: string
   audioBuffer: Buffer[]
+  audioFragments: Buffer[] // Store all fragments to build complete audio file
   lastProcessedTime: number
   isProcessing: boolean
-  lastAudioHash: string // Track processed audio to prevent re-transcription
 }
 
 export interface GroqWhisperChunkResponse {
@@ -46,10 +46,14 @@ function getGroqApiKey(customApiKey?: string): string {
 
 /**
  * Simple hash for audio data to detect duplicates
+ * Hash from the middle of the buffer to avoid WebM headers
  */
 function hashAudioData(buffer: Buffer): string {
-  const sample = buffer.slice(0, Math.min(1024, buffer.length))
-  return sample.toString('base64').slice(0, 32)
+  // Skip first 1KB (likely headers) and hash the next 4KB of actual audio data
+  const start = Math.min(1024, Math.floor(buffer.length / 4))
+  const end = Math.min(start + 4096, buffer.length)
+  const sample = buffer.slice(start, end)
+  return sample.toString('base64').slice(0, 64)
 }
 
 /**
@@ -65,9 +69,9 @@ export async function createGroqWhisperSession(
     prompt,
     accumulatedTranscript: "",
     audioBuffer: [],
+    audioFragments: [],
     lastProcessedTime: Date.now(),
     isProcessing: false,
-    lastAudioHash: "",
   }
 }
 
@@ -118,8 +122,9 @@ function mergeAudioBuffers(buffers: Buffer[]): Buffer {
 }
 
 /**
- * Process accumulated audio slice WITHOUT overlap
- * This prevents re-transcription and repetition issues
+ * Process audio chunk - accumulate fragments server-side
+ * Combine all fragments to create one complete, valid WebM file
+ * Then transcribe the complete audio
  */
 export async function processAudioSlice(
   session: GroqWhisperSession,
@@ -130,7 +135,6 @@ export async function processAudioSlice(
     throw new Error("Session is already processing a slice")
   }
 
-  // If no new audio, return empty result
   if (session.audioBuffer.length === 0) {
     return {
       session_id: session.sessionId,
@@ -143,68 +147,44 @@ export async function processAudioSlice(
   session.isProcessing = true
 
   try {
-    // Merge all accumulated audio chunks
-    const audioData = mergeAudioBuffers(session.audioBuffer)
+    const newAudioData = mergeAudioBuffers(session.audioBuffer)
 
-    console.log(`[${session.sessionId}] Processing audio slice: ${audioData.length} bytes`)
+    // Add this chunk to the accumulated fragments
+    session.audioFragments.push(newAudioData)
 
-    if (audioData.length < config.minChunkSizeBytes) {
-      console.log(`[${session.sessionId}] Audio chunk too small (${audioData.length} bytes), skipping transcription`)
-      session.isProcessing = false
-      return {
-        session_id: session.sessionId,
-        transcript: session.accumulatedTranscript,
-        incremental: "",
-        is_final: false,
-      }
-    }
+    // Combine ALL fragments to create complete audio file
+    const completeAudio = Buffer.concat(session.audioFragments)
 
-    // Check if this is the same audio we already processed
-    const currentHash = hashAudioData(audioData)
-    if (currentHash === session.lastAudioHash && session.lastAudioHash !== "") {
-      // Same audio, skip processing
-      console.warn(`[${session.sessionId}] ⚠️ DUPLICATE AUDIO DETECTED: Same audio hash, skipping re-transcription`)
-      session.isProcessing = false
-      session.audioBuffer = [] // Clear buffer
-      return {
-        session_id: session.sessionId,
-        transcript: session.accumulatedTranscript,
-        incremental: "",
-        is_final: false,
-      }
-    }
+    console.log(`[${session.sessionId}] Processing complete audio: ${completeAudio.length} bytes (${session.audioFragments.length} fragments)`)
 
-    // Transcribe ONLY the NEW audio
+    // Transcribe the COMPLETE audio so far
     const result = await transcribeGroqWhisperChunk(
       session.sessionId,
-      audioData,
-      session.accumulatedTranscript,
+      completeAudio,
+      "", // No existing transcript - we transcribe complete audio each time
       customApiKey,
       session.prompt
     )
 
-    // Only update if we got NEW content
-    if (result.incremental && result.incremental.trim().length > 0) {
-      console.log(`[${session.sessionId}] ✅ New transcription received: "${result.incremental.substring(0, 50)}${result.incremental.length > 50 ? '...' : ''}"`)
-      session.accumulatedTranscript = result.transcript
-      session.lastAudioHash = currentHash
-    } else {
-      console.log(`[${session.sessionId}] ℹ️ No new incremental content from transcription`)
-    }
+    //Update session with the complete transcript
+    session.accumulatedTranscript = result.transcript
+
+    console.log(`[${session.sessionId}] ✅ Complete transcript: "${result.transcript.substring(0, 100)}${result.transcript.length > 100 ? '...' : ''}"`)
 
     session.lastProcessedTime = Date.now()
-
-    // CRITICAL: Clear the entire buffer after processing
-    // NO overlap to prevent re-transcription
-    session.audioBuffer = []
-
+    session.audioBuffer = [] // Clear buffer
     session.isProcessing = false
 
-    return result
+    return {
+      session_id: session.sessionId,
+      transcript: result.transcript,
+      incremental: result.transcript, // Return full transcript as incremental for UI update
+      is_final: false
+    }
   } catch (error: any) {
     session.isProcessing = false
-    session.audioBuffer = [] // Clear buffer on error too
-    throw new Error(`Audio slice processing failed: ${error.message}`)
+    session.audioBuffer = []
+    throw new Error(`Audio chunk processing failed: ${error.message}`)
   }
 }
 
