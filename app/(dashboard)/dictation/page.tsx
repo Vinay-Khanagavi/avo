@@ -118,16 +118,46 @@ export default function DictationPage() {
       }
 
       // Finalize session
+      let finalTranscript = transcript
       if (sessionIdRef.current) {
         const finalResponse = await finalizeSession(sessionIdRef.current, selectedService)
         // Apply dictionary replacements (simple text replacement, no AI)
-        const processedTranscript = applyDictionaryReplacements(
+        finalTranscript = applyDictionaryReplacements(
           finalResponse.transcript,
           dictionaryRef.current
         )
-        setTranscript(processedTranscript)
+        setTranscript(finalTranscript)
         sessionIdRef.current = null
       }
+
+      // POST-PROCESSING REFINEMENT
+      // Call the AI to refine the text (spelling, grammar, punctuation)
+      if (finalTranscript && finalTranscript.trim().length > 0) {
+        try {
+          // Show some indication if needed, but isProcessing is already true
+          const refineResponse = await fetch("/api/refine", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: finalTranscript,
+              dictionary: dictionaryRef.current
+            })
+          })
+
+          if (refineResponse.ok) {
+            const data = await refineResponse.json()
+            if (data.refinedText) {
+              setTranscript(data.refinedText)
+            }
+          } else {
+            console.warn("Refinement API failed, keeping original text")
+          }
+        } catch (refineError) {
+          console.error("Error during refinement:", refineError)
+          // Keep original text on error
+        }
+      }
+
     } catch (error) {
       console.error("Error finalizing transcription:", error)
       setTranscript((prev) => prev + "\n[Error: Failed to finalize transcription. Please try again.]")
