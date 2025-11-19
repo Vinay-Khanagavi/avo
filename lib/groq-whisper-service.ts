@@ -8,9 +8,11 @@ import { cleanHallucinatedContent, deduplicateTranscript } from "@/lib/transcrip
 export interface GroqWhisperSession {
   sessionId: string
   prompt?: string
-  accumulatedTranscript: string
-  audioBuffer: Buffer[]
-  audioFragments: Buffer[] // Store all fragments to build complete audio file
+  accumulatedTranscript: string // The full transcript so far (committed + incremental)
+  committedTranscript: string   // The "solidified" transcript from previous chunks
+  audioBuffer: Buffer[]         // Current new audio chunks
+  recentChunks: Buffer[]        // Kept chunks for overlap context
+  headerChunk: Buffer | null    // The first chunk (WebM header)
   lastProcessedTime: number
   isProcessing: boolean
 }
@@ -32,8 +34,8 @@ const DEFAULT_GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC
 const GROQ_API_URL = "https://api.groq.com/openai/v1"
 
 const DEFAULT_STREAMING_CONFIG: StreamingConfig = {
-  sliceIntervalMs: 3000, // Process every 3 seconds (faster feedback)
-  minChunkSizeBytes: 4096, // Minimum 4KB audio data (ensures meaningful content beyond headers)
+  sliceIntervalMs: 4000, // Process every 4 seconds (balance latency vs context)
+  minChunkSizeBytes: 8192, // Minimum ~8KB audio data
   silenceThresholdMs: 2000, // 2 seconds of silence
 }
 
@@ -42,18 +44,6 @@ function getGroqApiKey(customApiKey?: string): string {
     return customApiKey
   }
   return DEFAULT_GROQ_API_KEY
-}
-
-/**
- * Simple hash for audio data to detect duplicates
- * Hash from the middle of the buffer to avoid WebM headers
- */
-function hashAudioData(buffer: Buffer): string {
-  // Skip first 1KB (likely headers) and hash the next 4KB of actual audio data
-  const start = Math.min(1024, Math.floor(buffer.length / 4))
-  const end = Math.min(start + 4096, buffer.length)
-  const sample = buffer.slice(start, end)
-  return sample.toString('base64').slice(0, 64)
 }
 
 /**
@@ -68,8 +58,10 @@ export async function createGroqWhisperSession(
     sessionId,
     prompt,
     accumulatedTranscript: "",
+    committedTranscript: "",
     audioBuffer: [],
-    audioFragments: [],
+    recentChunks: [],
+    headerChunk: null,
     lastProcessedTime: Date.now(),
     isProcessing: false,
   }
@@ -82,7 +74,14 @@ export function addAudioChunkToSession(
   session: GroqWhisperSession,
   audioChunk: Buffer
 ): void {
-  session.audioBuffer.push(audioChunk)
+  // Capture the first chunk as the header (WebM header is usually in the first chunk)
+  if (!session.headerChunk && session.audioBuffer.length === 0 && session.recentChunks.length === 0) {
+    session.headerChunk = audioChunk
+    // Also add to buffer for first processing
+    session.audioBuffer.push(audioChunk)
+  } else {
+    session.audioBuffer.push(audioChunk)
+  }
 }
 
 /**
@@ -122,9 +121,11 @@ function mergeAudioBuffers(buffers: Buffer[]): Buffer {
 }
 
 /**
- * Process audio chunk - accumulate fragments server-side
- * Combine all fragments to create one complete, valid WebM file
- * Then transcribe the complete audio
+ * Process audio chunk - Sliding Window Approach
+ * 1. Prepend last ~2s of previous audio (overlap) to current buffer
+ * 2. Transcribe the combined chunk with context prompt
+ * 3. Deduplicate/Merge result into committed transcript
+ * 4. Save last ~2s of current buffer for next iteration
  */
 export async function processAudioSlice(
   session: GroqWhisperSession,
@@ -147,57 +148,117 @@ export async function processAudioSlice(
   session.isProcessing = true
 
   try {
-    const newAudioData = mergeAudioBuffers(session.audioBuffer)
+    // 1. Prepare Audio Payload
+    // We must construct a valid WebM file: Header + (Overlap Chunks) + (Current Chunks)
 
-    // Add this chunk to the accumulated fragments
-    session.audioFragments.push(newAudioData)
+    const currentChunks = session.audioBuffer
+    const overlapChunks = session.recentChunks
+    const headerChunk = session.headerChunk
 
-    // Combine ALL fragments to create complete audio file
-    const completeAudio = Buffer.concat(session.audioFragments)
+    if (!headerChunk) {
+      // Should not happen if addAudioChunkToSession is called correctly
+      console.warn(`[${session.sessionId}] No header chunk found, using first current chunk`)
+    }
 
-    console.log(`[${session.sessionId}] Processing complete audio: ${completeAudio.length} bytes (${session.audioFragments.length} fragments)`)
+    // Combine: Header + Overlap + Current
+    // Note: If header is already in overlap or current (first slice), be careful not to duplicate
+    // But usually header is distinct.
 
-    // Transcribe the COMPLETE audio so far
+    const parts: Buffer[] = []
+
+    if (headerChunk) {
+      parts.push(headerChunk)
+    }
+
+    // Add overlap chunks (excluding header if it was stored there)
+    for (const chunk of overlapChunks) {
+      if (chunk !== headerChunk) {
+        parts.push(chunk)
+      }
+    }
+
+    // Add current chunks
+    for (const chunk of currentChunks) {
+      if (chunk !== headerChunk) {
+        parts.push(chunk)
+      }
+    }
+
+    const payloadAudio = Buffer.concat(parts)
+
+    // 2. Update Overlap for NEXT time
+    // Keep last N chunks that add up to ~1 second
+    // We iterate backwards from current + overlap
+
+    const allRecent = [...overlapChunks, ...currentChunks]
+    const keptChunks: Buffer[] = []
+    let keptSize = 0
+    const TARGET_OVERLAP_SIZE = 16 * 1024 // ~1 second of Opus (reduced from 32KB to prevent loops)
+
+    for (let i = allRecent.length - 1; i >= 0; i--) {
+      const chunk = allRecent[i]
+      // Don't keep the header in the "recent" list (we always prepend it separately)
+      if (chunk === headerChunk) continue
+
+      keptChunks.unshift(chunk)
+      keptSize += chunk.length
+
+      if (keptSize >= TARGET_OVERLAP_SIZE) break
+    }
+
+    session.recentChunks = keptChunks
+
+    console.log(`[${session.sessionId}] Processing slice: ${payloadAudio.length} bytes (Overlap chunks: ${session.recentChunks.length})`)
+
+    // 3. Transcribe with Context
+    // Use last 200 chars of committed transcript as prompt
+    const contextPrompt = session.committedTranscript.slice(-200).trim()
+
     const result = await transcribeGroqWhisperChunk(
       session.sessionId,
-      completeAudio,
-      "", // No existing transcript - we transcribe complete audio each time
+      payloadAudio,
+      session.committedTranscript, // Pass full committed for deduplication
       customApiKey,
-      session.prompt
+      session.prompt, // Original system prompt
+      contextPrompt   // Immediate context
     )
 
-    //Update session with the complete transcript
+    // 4. Update Session State
+    // The result.transcript is already the merged full transcript
     session.accumulatedTranscript = result.transcript
+    session.committedTranscript = result.transcript // Commit this state
 
-    console.log(`[${session.sessionId}] ✅ Complete transcript: "${result.transcript.substring(0, 100)}${result.transcript.length > 100 ? '...' : ''}"`)
+    console.log(`[${session.sessionId}] ✅ Updated transcript length: ${session.accumulatedTranscript.length}`)
 
     session.lastProcessedTime = Date.now()
-    session.audioBuffer = [] // Clear buffer
+    session.audioBuffer = [] // Clear current buffer
     session.isProcessing = false
 
     return {
       session_id: session.sessionId,
       transcript: result.transcript,
-      incremental: result.transcript, // Return full transcript as incremental for UI update
+      incremental: result.incremental,
       is_final: false
     }
   } catch (error: any) {
     session.isProcessing = false
-    session.audioBuffer = []
+    // Don't clear buffer on error, retry next time
+    console.error(`[${session.sessionId}] Processing failed: ${error.message}`)
     throw new Error(`Audio chunk processing failed: ${error.message}`)
   }
 }
 
 /**
  * Transcribe audio chunk using Groq Whisper API
- * NO context prompt to avoid hallucination and repetition
+ * Uses context prompt to maintain continuity
  */
 export async function transcribeGroqWhisperChunk(
   sessionId: string,
   audioChunk: Buffer,
   existingTranscript: string = "",
   customApiKey?: string,
-  prompt?: string
+  systemPrompt?: string,
+  contextPrompt?: string
 ): Promise<GroqWhisperChunkResponse> {
   const apiKey = getGroqApiKey(customApiKey)
   if (!apiKey) {
@@ -213,26 +274,25 @@ export async function transcribeGroqWhisperChunk(
 
     formData.append('model', 'whisper-large-v3-turbo')
     formData.append('temperature', '0')
-    formData.append('response_format', 'json') // Use simple JSON, not verbose
+    formData.append('response_format', 'json')
     formData.append('language', 'en')
 
-    // CRITICAL: Do NOT add prompt/context to avoid repetition hallucination
-    // The deduplication logic will handle continuity
-    // Only add dictionary words if absolutely necessary
-    if (prompt && prompt.trim() && existingTranscript.length === 0) {
-      // Only on FIRST transcription, add minimal dictionary
-      const dictionaryWords = prompt
-        .replace(/Please use the following dictionary words when transcribing:/i, "")
-        .replace(/\(should be transcribed as:[^)]+\)/g, "")
-        .split(",")
-        .map(w => w.trim())
-        .filter(w => w.length > 0 && w.length < 50)
-        .filter(w => /^[a-zA-Z0-9\s'-]+$/.test(w))
-        .slice(0, 3) // Only 3 most important words
+    // Construct the prompt
+    // 1. System instructions (dictionary, style)
+    // 2. Context (previous transcript)
+    let finalPrompt = ""
 
-      if (dictionaryWords.length > 0) {
-        formData.append('prompt', dictionaryWords.join(", "))
-      }
+    if (systemPrompt) {
+      finalPrompt += systemPrompt + " "
+    }
+
+    if (contextPrompt) {
+      // Whisper uses the prompt as "previous context"
+      finalPrompt += "Previous text: " + contextPrompt
+    }
+
+    if (finalPrompt.trim()) {
+      formData.append('prompt', finalPrompt.substring(0, 1024)) // Limit prompt length
     }
 
     const response = await fetch(`${GROQ_API_URL}/audio/transcriptions`, {
@@ -261,26 +321,15 @@ export async function transcribeGroqWhisperChunk(
       throw new Error('Invalid response format from Groq API')
     }
 
-    let transcript = data.text.trim()
+    let rawTranscript = data.text.trim()
 
-    console.log(`[${sessionId}] Groq API returned: "${transcript.substring(0, 100)}${transcript.length > 100 ? '...' : ''}"`)
-
-    // If transcript is empty or only whitespace, return empty
-    if (!transcript || transcript.length === 0) {
-      console.log(`[${sessionId}] Empty transcript from Groq API, ignoring`)
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: false,
-      }
-    }
+    console.log(`[${sessionId}] Groq Raw: "${rawTranscript.substring(0, 50)}..."`)
 
     // Clean up common hallucinated phrases
-    transcript = cleanHallucinatedContent(transcript)
+    rawTranscript = cleanHallucinatedContent(rawTranscript)
 
-    // Use robust deduplication logic
-    const result = deduplicateTranscript(existingTranscript, transcript, sessionId)
+    // Use robust deduplication logic to merge with existing
+    const result = deduplicateTranscript(existingTranscript, rawTranscript, sessionId)
 
     return {
       session_id: sessionId,
@@ -324,103 +373,7 @@ export async function finalizeGroqWhisperSession(
   }
 }
 
-/**
- * Enhanced deduplication to prevent phrase repetition
- */
-export function enhancedDeduplicateTranscript(
-  existingTranscript: string,
-  newTranscript: string,
-  sessionId: string
-): { transcript: string; incremental: string } {
 
-  // If no existing transcript, everything is new
-  if (!existingTranscript || existingTranscript.trim().length === 0) {
-    return {
-      transcript: newTranscript.trim(),
-      incremental: newTranscript.trim()
-    }
-  }
-
-  const existing = existingTranscript.trim()
-  const newText = newTranscript.trim()
-
-  // If new transcript is empty or identical, no update
-  if (!newText || newText === existing) {
-    return {
-      transcript: existing,
-      incremental: ""
-    }
-  }
-
-  // Check if new text is subset of existing (hallucination/repetition)
-  if (existing.includes(newText)) {
-    // New text is already in existing transcript - ignore it
-    return {
-      transcript: existing,
-      incremental: ""
-    }
-  }
-
-  // Check if new transcript starts with existing transcript
-  if (newText.startsWith(existing)) {
-    const incremental = newText.slice(existing.length).trim()
-    return {
-      transcript: newText,
-      incremental: incremental
-    }
-  }
-
-  // Find common phrase overlap (word-level matching)
-  const existingWords = existing.split(/\s+/)
-  const newWords = newText.split(/\s+/)
-
-  // Look for overlap at the end of existing and start of new
-  let maxOverlap = 0
-  for (let overlapLen = 1; overlapLen <= Math.min(existingWords.length, newWords.length); overlapLen++) {
-    const existingSuffix = existingWords.slice(-overlapLen).join(' ').toLowerCase()
-    const newPrefix = newWords.slice(0, overlapLen).join(' ').toLowerCase()
-
-    if (existingSuffix === newPrefix) {
-      maxOverlap = overlapLen
-    }
-  }
-
-  if (maxOverlap > 0) {
-    // Found overlap - merge carefully
-    const incrementalWords = newWords.slice(maxOverlap)
-    if (incrementalWords.length === 0) {
-      // No new words, just overlap
-      return {
-        transcript: existing,
-        incremental: ""
-      }
-    }
-
-    const incremental = incrementalWords.join(' ').trim()
-    const combined = existing + ' ' + incremental
-    return {
-      transcript: combined.trim(),
-      incremental: incremental
-    }
-  }
-
-  // No overlap found - check if this might be a complete re-transcription
-  // If new text is significantly shorter, it might be hallucination
-  if (newWords.length < existingWords.length * 0.5) {
-    // New text is less than half the length - likely not a continuation
-    console.warn(`[${sessionId}] Potential hallucination detected, ignoring new text`)
-    return {
-      transcript: existing,
-      incremental: ""
-    }
-  }
-
-  // Append with space (genuine new content)
-  return {
-    transcript: existing + ' ' + newText,
-    incremental: newText
-  }
-}
 
 /**
  * Example usage pattern for streaming transcription

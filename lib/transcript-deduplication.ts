@@ -55,6 +55,10 @@ export function cleanHallucinatedContent(transcript: string): string {
  * Deduplicate transcript by merging existing and new transcripts intelligently
  * Prevents repetition when streaming audio is processed incrementally
  */
+/**
+ * Deduplicate transcript by merging existing and new transcripts intelligently
+ * Prevents repetition when streaming audio is processed incrementally
+ */
 export function deduplicateTranscript(
     existingTranscript: string,
     newTranscript: string,
@@ -92,59 +96,219 @@ export function deduplicateTranscript(
     // CRITICAL: Check if new text is a subset of existing (hallucination/repetition)
     if (existing.includes(newText)) {
         // New text is already contained in existing transcript - ignore it
-        console.warn(`[${sessionId}] ⚠️ REPETITION DETECTED: New text "${newText.substring(0, 50)}..." is already in existing transcript. IGNORING.`)
+        // console.warn(`[${sessionId}] ⚠️ REPETITION DETECTED: New text is subset. IGNORING.`)
         return {
             transcript: existing,
             incremental: ""
         }
     }
 
-    // Check if new text is a phrase-level repetition (repeated at word boundaries)
-    const existingWords = existing.split(/\s+/).filter(w => w.length > 0)
+    // STRATEGY 0: Global Loop Detection
+    // Check if the new text repeats content from the *beginning* of the session (or significantly earlier).
+    // This catches the "Header Re-transcription" bug where the first sentence is repeated.
+
     const newWords = newText.split(/\s+/).filter(w => w.length > 0)
 
-    // If new text repeats a significant portion from the end of existing text
-    if (newWords.length >= 3) {
-        for (let phraseLen = Math.min(newWords.length, 10); phraseLen >= 3; phraseLen--) {
-            const newPhrase = newWords.slice(0, phraseLen).join(' ').toLowerCase()
-            const existingEnd = existingWords.slice(-phraseLen).join(' ').toLowerCase()
+    // Only check if new text is substantial enough to be a loop (e.g. > 4 words)
+    if (newWords.length > 4) {
+        // Check if the start of newText matches the start of existing (but we are appending, so it shouldn't match start)
+        // We check the first 10 words of existing
+        const existingStartWords = existing.split(/\s+/).slice(0, 20)
+        const newStartWords = newWords.slice(0, 10)
 
-            if (newPhrase === existingEnd) {
-                // Check if the rest of new text is also repetitive
-                const remainingWords = newWords.slice(phraseLen)
-                if (remainingWords.length === 0 || remainingWords.length < phraseLen / 2) {
-                    console.warn(`[${sessionId}] ⚠️ PHRASE REPETITION DETECTED: "${newPhrase}" repeats from end of existing. IGNORING.`)
-                    return {
-                        transcript: existing,
-                        incremental: ""
-                    }
-                }
-            }
-        }
-    }
-
-    // Check if new transcript starts with existing transcript (ideal case)
-    if (newText.startsWith(existing)) {
-        const incremental = newText.slice(existing.length).trim()
-
-        // If no actual new content, return empty incremental
-        if (!incremental || incremental.length === 0) {
+        if (existingStartWords.length > 10 && arePhrasesEqual(existingStartWords.slice(0, 5), newStartWords.slice(0, 5))) {
+            console.warn(`[${sessionId}] ⚠️ GLOBAL LOOP DETECTED: New text repeats start of session. IGNORING.`)
             return {
                 transcript: existing,
                 incremental: ""
             }
         }
 
+        // Also check if newText is just a large chunk of *any* previous part of existing
+        // (Simpler subset check above handles exact matches, but this handles fuzzy/partial matches)
+        if (existing.length > newText.length * 2) {
+            // If existing is much longer, and newText is found inside it (fuzzy)
+            // We rely on the subset check above for exact matches.
+            // For fuzzy, we can check if the first half of newText is in existing
+            const firstHalf = newWords.slice(0, Math.floor(newWords.length / 2)).join(' ')
+            if (firstHalf.length > 20 && existing.includes(firstHalf)) {
+                console.warn(`[${sessionId}] ⚠️ LARGE REPETITION DETECTED: Start of new text is already in history. IGNORING.`)
+                return {
+                    transcript: existing,
+                    incremental: ""
+                }
+            }
+        }
+    }
+
+    // SLIDING WINDOW MERGE STRATEGY
+    // We expect the newText to start with the last few words of existing (overlap)
+    // We need to find the "cut point" where new content begins
+
+    // Ensure we have word arrays (if not already created in loop detection)
+    // We need to re-assign or create new variables if we want to be safe, 
+    // but since we are in the same scope, we can just use different names or reuse if let.
+    // To avoid confusion and lint errors, let's just use the variables we need.
+
+    // If they were declared with 'const' above, we can't redeclare. 
+    // But the previous tool call added 'const newWords' at line ~107.
+    // So 'newWords' is available. 'existingWords' was NOT added there.
+
+    const existingWords = existing.split(/\s+/).filter(w => w.length > 0)
+    // newWords is already declared above, so we don't redeclare it.
+    // But we need to make sure it's the same content.
+    // const newWords = newText.split(/\s+/).filter(w => w.length > 0)
+
+    // STRATEGY 1: Anchor Search
+    // Look for the last N words of 'existing' inside 'newTranscript'
+    // If found, we assume everything before that point in 'newTranscript' is overlap/history
+
+    // Try anchors of length 5, 4, 3, 2
+    const MAX_ANCHOR_LEN = 5
+    const MIN_ANCHOR_LEN = 2
+
+    // Only search in the first M words of new transcript to avoid false positives later in text
+    // (e.g. if the user says the same phrase again later)
+    const SEARCH_WINDOW = 30
+
+    for (let anchorLen = MAX_ANCHOR_LEN; anchorLen >= MIN_ANCHOR_LEN; anchorLen--) {
+        if (existingWords.length < anchorLen) continue
+
+        const anchor = existingWords.slice(-anchorLen)
+
+        // Search for this anchor in newWords (within window)
+        for (let i = 0; i < Math.min(newWords.length, SEARCH_WINDOW) - anchorLen + 1; i++) {
+            const candidate = newWords.slice(i, i + anchorLen)
+
+            if (arePhrasesEqual(anchor, candidate)) {
+                // Found the anchor!
+                // The cut point is after this anchor
+                const splitIndex = i + anchorLen
+
+                const incrementalWords = newWords.slice(splitIndex)
+
+                if (incrementalWords.length === 0) {
+                    // New text ends exactly at the anchor
+                    return {
+                        transcript: existing,
+                        incremental: ""
+                    }
+                }
+
+                const incremental = incrementalWords.join(' ')
+                // console.log(`[${sessionId}] ✅ Merged via Anchor Search (len ${anchorLen}). Added: "${incremental.substring(0, 30)}..."`)
+
+                return {
+                    transcript: existing + " " + incremental,
+                    incremental: incremental
+                }
+            }
+        }
+    }
+
+    // STRATEGY 2: Reverse Overlap (Correction Detection)
+    // Check if the START of 'newTranscript' matches a sequence inside the END of 'existingTranscript'.
+    // This handles cases where Whisper corrects a previous mistake.
+    // E.g. Existing: "...wanders through an eye"
+    //      New:      "A long researcher wanders through an abandoned..."
+    //      Match:    "A long researcher wanders through" is found in Existing.
+
+    // Look at the first K words of New
+    const START_ANCHOR_LEN = 3
+    if (newWords.length >= START_ANCHOR_LEN) {
+        const startAnchor = newWords.slice(0, START_ANCHOR_LEN)
+
+        // Search for this anchor in the last 30 words of Existing
+        const searchWindowSize = 30
+        const searchStartIndex = Math.max(0, existingWords.length - searchWindowSize)
+        const searchWords = existingWords.slice(searchStartIndex)
+
+        for (let i = 0; i <= searchWords.length - START_ANCHOR_LEN; i++) {
+            const candidate = searchWords.slice(i, i + START_ANCHOR_LEN)
+
+            if (arePhrasesEqual(startAnchor, candidate)) {
+                // Found the start of New inside Existing!
+                // This suggests New is a replacement/correction starting from this point.
+
+                // The match index in the FULL existingWords array
+                const matchIndex = searchStartIndex + i
+
+                // We keep everything BEFORE the match
+                const keptWords = existingWords.slice(0, matchIndex)
+
+                // And append ALL of New
+                // (Since New starts with the anchor, we just append New)
+
+                const keptText = keptWords.join(' ')
+                const combined = keptText + (keptText.length > 0 ? ' ' : '') + newText
+
+                // console.log(`[${sessionId}] ✅ Merged via Reverse Overlap (Correction). Replaced tail with new text.`)
+
+                return {
+                    transcript: combined.trim(),
+                    incremental: newText // We can't easily determine the "incremental" part relative to the old bad tail, so just return newText
+                }
+            }
+        }
+    }
+
+    // STRATEGY 3: Fallback to simple overlap check (if anchor not found)
+    // This handles cases where the overlap is very short (1 word)
+    // or if the anchor was slightly different but the very end matches
+
+    const maxOverlapCheck = Math.min(existingWords.length, newWords.length, 5)
+    let bestOverlapLen = 0
+
+    for (let len = maxOverlapCheck; len >= 1; len--) {
+        const existingSuffix = existingWords.slice(-len)
+        const newPrefix = newWords.slice(0, len)
+
+        if (arePhrasesEqual(existingSuffix, newPrefix)) {
+            bestOverlapLen = len
+            break
+        }
+    }
+
+    if (bestOverlapLen > 0) {
+        const incrementalWords = newWords.slice(bestOverlapLen)
+        const incremental = incrementalWords.join(' ')
+
         return {
-            transcript: newText,
+            transcript: existing + " " + incremental,
             incremental: incremental
         }
     }
 
-    // Check if existing ends with the start of new (word-level overlap)
-    const result = findOverlapAndMerge(existing, newText, sessionId)
+    // 2. Fallback: If no overlap found, check if it's a continuation
+    // If we used a prompt, Whisper usually continues perfectly.
+    // But sometimes it repeats the prompt.
 
-    return result
+    // Check if newText STARTS with the prompt we gave (last few words of existing)
+    // This is handled by the overlap check above usually.
+
+    // If no overlap, it might be a disjoint continuation (silence gap)
+    // Just append
+    // console.log(`[${sessionId}] ℹ️ No overlap found. Appending: "${newText.substring(0, 30)}..."`)
+
+    return {
+        transcript: existing + " " + newText,
+        incremental: newText
+    }
+}
+
+/**
+ * Fuzzy phrase comparison
+ * Allows for minor punctuation/case differences
+ */
+function arePhrasesEqual(words1: string[], words2: string[]): boolean {
+    if (words1.length !== words2.length) return false
+
+    for (let i = 0; i < words1.length; i++) {
+        const w1 = normalizeWord(words1[i])
+        const w2 = normalizeWord(words2[i])
+        if (w1 !== w2) return false
+    }
+    return true
 }
 
 /**
@@ -156,123 +320,8 @@ function findOverlapAndMerge(
     newText: string,
     sessionId: string
 ): { transcript: string; incremental: string } {
-
-    const existingWords = existing.split(/\s+/).filter(w => w.length > 0)
-    const newWords = newText.split(/\s+/).filter(w => w.length > 0)
-
-    // If new text has fewer words than existing, likely hallucination
-    if (newWords.length < existingWords.length * 0.3 && existingWords.length > 5) {
-        console.warn(`[${sessionId}] ⚠️ HALLUCINATION DETECTED: New text has only ${newWords.length} words vs ${existingWords.length} existing. Likely hallucination. IGNORING.`)
-        return {
-            transcript: existing,
-            incremental: ""
-        }
-    }
-
-    // Detect if new text is just the same words rearranged or repeated
-    const newTextNormalized = newText.toLowerCase().replace(/[^a-z0-9\s]/g, '')
-    const existingNormalized = existing.toLowerCase().replace(/[^a-z0-9\s]/g, '')
-
-    // Check if new text is suspiciously similar (same words, different order)
-    const newWordSet = new Set(newTextNormalized.split(/\s+/))
-    const existingWordSet = new Set(existingNormalized.split(/\s+/))
-    const commonWords = [...newWordSet].filter(w => existingWordSet.has(w))
-    const wordSimilarity = commonWords.length / Math.max(newWordSet.size, 1)
-
-    // If 90%+ of words are the same, likely repetition
-    if (wordSimilarity > 0.9 && newWords.length < existingWords.length) {
-        console.warn(`[${sessionId}] ⚠️ WORD SIMILARITY DETECTED: ${(wordSimilarity * 100).toFixed(0)}% word overlap. Likely repetition. IGNORING.`)
-        return {
-            transcript: existing,
-            incremental: ""
-        }
-    }
-
-    // Find longest overlap at end of existing and start of new
-    let maxOverlapLength = 0
-    let maxOverlapIndex = 0
-
-    // Try different overlap lengths (from 1 word to min of both lengths)
-    const maxCheckLength = Math.min(existingWords.length, newWords.length, 15) // Check up to 15 words
-
-    for (let overlapLen = 1; overlapLen <= maxCheckLength; overlapLen++) {
-        const existingSuffix = existingWords.slice(-overlapLen)
-        const newPrefix = newWords.slice(0, overlapLen)
-
-        // Compare words (case insensitive, normalized)
-        let matches = true
-        for (let i = 0; i < overlapLen; i++) {
-            const existingWord = normalizeWord(existingSuffix[i])
-            const newWord = normalizeWord(newPrefix[i])
-
-            if (existingWord !== newWord) {
-                matches = false
-                break
-            }
-        }
-
-        if (matches) {
-            maxOverlapLength = overlapLen
-            maxOverlapIndex = overlapLen
-        }
-    }
-
-    // If we found overlap, merge intelligently
-    if (maxOverlapLength > 0) {
-        const incrementalWords = newWords.slice(maxOverlapIndex)
-
-        // If no new words after overlap, nothing to add
-        if (incrementalWords.length === 0) {
-            console.log(`[${sessionId}] ℹ️ Overlap detected (${maxOverlapLength} words) but no new content. Keeping existing.`)
-            return {
-                transcript: existing,
-                incremental: ""
-            }
-        }
-
-        const incremental = incrementalWords.join(' ').trim()
-        const combined = existing + ' ' + incremental
-
-        console.log(`[${sessionId}] ✅ Merged with overlap of ${maxOverlapLength} words. Added: "${incremental.substring(0, 50)}${incremental.length > 50 ? '...' : ''}"`)
-
-        return {
-            transcript: combined.trim(),
-            incremental: incremental
-        }
-    }
-
-    // No overlap found - check if this is genuinely new content or hallucination
-
-    // Calculate similarity ratio
-    const similarity = calculateSimilarity(existing, newText)
-
-    if (similarity > 0.7) {
-        // Very similar - likely a re-transcription, keep existing
-        console.warn(`[${sessionId}] ⚠️ HIGH SIMILARITY DETECTED: ${(similarity * 100).toFixed(0)}% similar to existing. Likely re-transcription. IGNORING.`)
-        return {
-            transcript: existing,
-            incremental: ""
-        }
-    }
-
-    // Appears to be genuinely new content - append it
-    // But check if it's suspiciously short
-    if (newWords.length < 3 && existingWords.length > 10) {
-        console.warn(`[${sessionId}] ⚠️ VERY SHORT TEXT DETECTED: Only ${newWords.length} words. Likely hallucination. IGNORING.`)
-        return {
-            transcript: existing,
-            incremental: ""
-        }
-    }
-
-    console.log(`[${sessionId}] ✅ No overlap found. Appending new content: "${newText.substring(0, 50)}${newText.length > 50 ? '...' : ''}"`)
-
-    // Append new content with proper spacing
-    const combined = existing + ' ' + newText
-    return {
-        transcript: combined.trim(),
-        incremental: newText
-    }
+    // Legacy function kept for reference if needed, but main logic moved to deduplicateTranscript
+    return deduplicateTranscript(existing, newText, sessionId)
 }
 
 /**
@@ -281,7 +330,7 @@ function findOverlapAndMerge(
 function normalizeWord(word: string): string {
     return word
         .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
+        .replace(/[^a-z0-9]/g, '') // aggressive normalization
 }
 
 /**
