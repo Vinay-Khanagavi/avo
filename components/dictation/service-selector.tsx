@@ -59,11 +59,11 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
             <SelectValue>{getDisplayValue()}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="whisper">
+            {/* <SelectItem value="whisper">
               {hasCustomKeys ? "Whisper (Custom)" : "Whisper (AWS)"}
             </SelectItem>
             <SelectItem value="deepgram">Deepgram</SelectItem>
-            <SelectItem value="assemblyai">AssemblyAI</SelectItem>
+            <SelectItem value="assemblyai">AssemblyAI</SelectItem> */}
             <SelectItem value="groq-whisper">Groq Whisper</SelectItem>
             <SelectItem value="add-custom" className="text-primary">
               <div className="flex items-center gap-2">
@@ -85,11 +85,11 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
           <SelectValue>{getDisplayValue()}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="whisper">
+          {/* <SelectItem value="whisper">
             {hasCustomKeys ? "Whisper (Custom)" : "Whisper (AWS)"}
           </SelectItem>
           <SelectItem value="deepgram">Deepgram</SelectItem>
-          <SelectItem value="assemblyai">AssemblyAI</SelectItem>
+          <SelectItem value="assemblyai">AssemblyAI</SelectItem> */}
           <SelectItem value="groq-whisper">Groq Whisper</SelectItem>
           <SelectItem value="add-custom" className="text-primary">
             <div className="flex items-center gap-2">

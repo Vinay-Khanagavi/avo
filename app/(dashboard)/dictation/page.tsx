@@ -16,17 +16,21 @@ import { applyDictionaryReplacements, fetchDictionaryWords } from "@/lib/diction
 export default function DictationPage() {
   const [transcript, setTranscript] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
-  const [selectedService, setSelectedService] = useState<TranscriptionService>("whisper")
+  const [selectedService, setSelectedService] = useState<TranscriptionService>("groq-whisper")
   const { isRecording, setIsRecording } = useRecording()
   const sessionIdRef = useRef<string | null>(null)
   const pendingChunksRef = useRef<Blob[]>([])
   const dictionaryRef = useRef<Array<{ word: string; substitution?: string | null }>>([])
 
-  // Load transcription service from localStorage
+  // Load transcription service from localStorage, default to groq-whisper
   useEffect(() => {
     const savedService = localStorage.getItem("transcriptionService") as TranscriptionService
     if (savedService) {
       setSelectedService(savedService)
+    } else {
+      // Set default to groq-whisper if no saved preference
+      setSelectedService("groq-whisper")
+      localStorage.setItem("transcriptionService", "groq-whisper")
     }
   }, [])
 
@@ -63,11 +67,11 @@ export default function DictationPage() {
   }
 
   const handleStart = async () => {
-  setIsRecording(true)
-  // Only clear transcript if starting a new session (not on stop)
-  setTranscript("")
-  sessionIdRef.current = null
-  pendingChunksRef.current = []
+    setIsRecording(true)
+    // Only clear transcript if starting a new session (not on stop)
+    setTranscript("")
+    sessionIdRef.current = null
+    pendingChunksRef.current = []
 
     try {
       // Fetch dictionary words for post-transcription replacement (no AI needed)

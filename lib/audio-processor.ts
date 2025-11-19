@@ -1,21 +1,8 @@
-/**
- * Audio processing utilities for converting audio to PCM format
- * required by Amazon Transcribe Streaming API
- * 
- * NOTE: These functions use browser APIs and should only be called client-side
- */
-
 export interface AudioChunk {
   data: ArrayBuffer
   timestamp: number
 }
 
-/**
- * Convert audio blob to PCM format (16-bit, 16kHz, mono)
- * This is required by Amazon Transcribe Streaming API
- * 
- * Client-side only - uses Web Audio API
- */
 export async function convertToPCM(audioBlob: Blob): Promise<Uint8Array> {
   if (typeof window === "undefined") {
     throw new Error("convertToPCM can only be called client-side")
@@ -36,9 +23,6 @@ export async function convertToPCM(audioBlob: Blob): Promise<Uint8Array> {
   }
 }
 
-/**
- * Convert AudioBuffer to PCM format (16-bit, mono)
- */
 function convertAudioBufferToPCM(audioBuffer: AudioBuffer): Uint8Array {
   const numChannels = audioBuffer.numberOfChannels
   const length = audioBuffer.length
@@ -82,16 +66,7 @@ export function createMediaRecorder(stream: MediaStream): MediaRecorder {
   return new MediaRecorder(stream, options)
 }
 
-/**
- * Slice audio into 5-second chunks and stream them incrementally
- * Implements sound clip slicing with buffer overlap on the server side
- * 
- * Strategy:
- * - First chunk has WebM headers - send immediately
- * - Subsequent chunks are fragments - combine with first chunk to create complete WebM
- * - Stream slices immediately for real-time transcription
- * - Server handles buffer overlap and incremental merging
- */
+
 export function createAudioSlicer(
   mediaRecorder: MediaRecorder,
   onChunk: (chunk: Blob) => void
@@ -104,30 +79,37 @@ export function createAudioSlicer(
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) {
       chunkCount++
-      
+
       if (chunkCount === 1) {
         // First chunk has WebM headers - send immediately for real-time processing
         firstChunkRef.push(event.data)
         accumulatedChunks.push(event.data)
-        
-        // Send first chunk immediately if it's valid
-        if (event.data.size > 2048) {
+
+        // Send first chunk immediately if it has sufficient audio data (not just headers)
+        // WebM headers are typically ~100-500 bytes, so 4KB ensures we have real audio
+        if (event.data.size > 4096) {
+          console.log(`[AudioProcessor] First chunk ready: ${event.data.size} bytes`)
           onChunk(event.data)
+        } else {
+          console.log(`[AudioProcessor] First chunk too small (${event.data.size} bytes), waiting for more data`)
         }
       } else {
         // Subsequent chunks are fragments - combine with first chunk to create complete WebM
         accumulatedChunks.push(event.data)
-        
+
         // Create complete segment by combining first chunk (with headers) + fragments
         // This creates a valid WebM file that ffmpeg can process
         const completeSegment = new Blob(accumulatedChunks, { type: 'audio/webm;codecs=opus' })
-        
-        // Send immediately for streaming transcription
-        // Server will handle buffer overlap and merge with existing transcript
-        if (completeSegment.size > 2048) {
+
+        // Send immediately for streaming transcription with proper size threshold
+        // Ensure we have enough audio data to transcribe (not just headers)
+        if (completeSegment.size > 4096) {
+          console.log(`[AudioProcessor] Sending chunk ${chunkCount}: ${completeSegment.size} bytes (${accumulatedChunks.length} fragments)`)
           onChunk(completeSegment)
+        } else {
+          console.log(`[AudioProcessor] Chunk ${chunkCount} too small (${completeSegment.size} bytes), accumulating more data`)
         }
-        
+
         // Keep only the last fragment for next iteration (for continuity)
         // This maintains the buffer overlap on client side too
         if (accumulatedChunks.length > 1) {
@@ -146,7 +128,7 @@ export function createAudioSlicer(
 
   return () => {
     mediaRecorder.stop()
-    
+
     // Send any remaining accumulated chunks when stopping
     // This ensures the final slice is processed
     if (accumulatedChunks.length > 0) {
