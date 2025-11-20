@@ -12,6 +12,7 @@ import {
   finalizeSession,
 } from "@/lib/whisper-stream"
 import { applyDictionaryReplacements, fetchDictionaryWords } from "@/lib/dictionary-replace"
+import { detectQuotaError } from "@/lib/api-error-handler"
 
 export default function DictationPage() {
   const [transcript, setTranscript] = useState("")
@@ -88,8 +89,16 @@ export default function DictationPage() {
       sessionIdRef.current = session.sessionId
     } catch (error: any) {
       console.error("Error creating session:", error)
-      const errorMessage = error?.message || "Failed to start transcription session"
-      setTranscript(`[Error: ${errorMessage}]`)
+
+      // Check if it's a quota error
+      const quotaError = detectQuotaError(error, selectedService)
+      if (quotaError.isQuotaError) {
+        alert(`❌ ${quotaError.message}\n\nTo continue using this service, please add your own API key from the dropdown menu.`)
+        setTranscript(`[Quota Error] Free trial credits for ${selectedService} have been exhausted. Please add your own API key.`)
+      } else {
+        const errorMessage = error?.message || "Failed to start transcription session"
+        setTranscript(`[Error: ${errorMessage}]`)
+      }
       setIsRecording(false)
     }
   }
@@ -110,8 +119,14 @@ export default function DictationPage() {
               dictionaryRef.current
             )
             setTranscript(processedTranscript)
-          } catch (error) {
+          } catch (error: any) {
             console.error("Error processing pending chunk:", error)
+
+            // Check for quota error
+            const quotaError = detectQuotaError(error, selectedService)
+            if (quotaError.isQuotaError) {
+              alert(`❌ ${quotaError.message}\n\nTo continue using this service, please add your own API key from the dropdown menu.`)
+            }
           }
         }
         pendingChunksRef.current = []
@@ -183,8 +198,16 @@ export default function DictationPage() {
           dictionaryRef.current
         )
         setTranscript(processedTranscript)
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error processing chunk:", error)
+
+        // Check for quota error
+        const quotaError = detectQuotaError(error, selectedService)
+        if (quotaError.isQuotaError) {
+          alert(`❌ ${quotaError.message}\n\nTo continue using this service, please add your own API key from the dropdown menu.`)
+          setTranscript(`[Quota Error] Free trial credits for ${selectedService} have been exhausted. Please add your own API key.`)
+        }
+
         // Queue failed chunk for retry on stop
         pendingChunksRef.current.push(chunk)
       }
