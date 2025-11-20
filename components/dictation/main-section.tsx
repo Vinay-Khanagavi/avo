@@ -207,10 +207,9 @@ export function MainSection({
               className={`
                 px-3 md:px-6 py-2 md:py-3 rounded-lg font-sans font-semibold text-xs md:text-sm md:text-base
                 transition-all duration-300 ease-out relative
-                ${
-                  activeTab === tab.id
-                    ? "bg-[#ffa946] text-black shadow-[3px_3px_2px_0px_rgba(0,0,0,0.4)] border-2 border-white"
-                    : "bg-white text-black border-2 border-black hover:bg-gray-50"
+                ${activeTab === tab.id
+                  ? "bg-[#ffa946] text-black shadow-[3px_3px_2px_0px_rgba(0,0,0,0.4)] border-2 border-white"
+                  : "bg-white text-black border-2 border-black hover:bg-gray-50"
                 }
               `}
               style={{
@@ -223,7 +222,7 @@ export function MainSection({
         </div>
 
         {/* Tab Content */}
-  <div ref={contentRef} className="space-y-6 md:space-y-8 px-4 md:px-0">
+        <div ref={contentRef} className="space-y-6 md:space-y-8 px-4 md:px-0">
           {/* Heading and Description */}
           <div className="text-center space-y-3 md:space-y-4">
             <h2 className="text-2xl md:text-3xl lg:text-4xl font-medium font-serif">
@@ -276,19 +275,37 @@ export function MainSection({
                 </div>
                 {/* Email Body */}
                 <div className="min-h-[200px] text-foreground font-sans font-medium leading-relaxed whitespace-pre-wrap">
-                  {isInteractive && transcript ? transcript : currentContent.content}
+                  {isInteractive && transcript ? (
+                    transcript
+                  ) : isInteractive && isRecording ? (
+                    <span className="text-muted-foreground italic">Listening...</span>
+                  ) : (
+                    currentContent.content
+                  )}
                 </div>
               </div>
             ) : activeTab === "list" ? (
               <div className="space-y-4 relative z-10">
                 <h3 className="text-xl font-semibold font-sans mb-4">Grocery List</h3>
                 <div className="min-h-[150px] text-foreground font-sans font-medium leading-relaxed whitespace-pre-wrap">
-                  {isInteractive && transcript ? transcript : currentContent.content}
+                  {isInteractive && transcript ? (
+                    transcript
+                  ) : isInteractive && isRecording ? (
+                    <span className="text-muted-foreground italic">Listening...</span>
+                  ) : (
+                    currentContent.content
+                  )}
                 </div>
               </div>
             ) : (
               <div className="min-h-[150px] text-foreground font-sans font-medium leading-relaxed whitespace-pre-wrap relative z-10">
-                {isInteractive && transcript ? transcript : currentContent.content}
+                {isInteractive && transcript ? (
+                  transcript
+                ) : isInteractive && isRecording ? (
+                  <span className="text-muted-foreground italic">Listening...</span>
+                ) : (
+                  currentContent.content
+                )}
               </div>
             )}
           </div>

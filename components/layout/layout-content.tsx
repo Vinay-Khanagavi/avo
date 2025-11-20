@@ -11,7 +11,7 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
   const { isRecording } = useRecording()
   const [isMounted, setIsMounted] = useState(false)
   const pathname = usePathname()
-  const [selectedService, setSelectedService] = useState<TranscriptionService>("whisper")
+  const [selectedService, setSelectedService] = useState<TranscriptionService>("groq-whisper")
   const isDictationPage = pathname === "/dictation"
 
   useEffect(() => {

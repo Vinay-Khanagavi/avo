@@ -1,10 +1,12 @@
 /**
  * Deepgram transcription service implementation
+ * Uses batch mode - accumulates audio and transcribes when recording stops
  */
 
 export interface DeepgramSession {
   sessionId: string
   prompt?: string
+  audioChunks: Buffer[]  // Accumulate all audio chunks
 }
 
 export interface DeepgramChunkResponse {
@@ -18,7 +20,6 @@ const DEFAULT_DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY || process.env.NEX
 const DEEPGRAM_API_URL = "https://api.deepgram.com/v1"
 
 function getDeepgramApiKey(customApiKey?: string): string {
-  // Use custom API key if provided
   if (customApiKey) {
     return customApiKey
   }
@@ -31,29 +32,39 @@ function getDeepgramApiKey(customApiKey?: string): string {
 export async function createDeepgramSession(
   prompt?: string
 ): Promise<DeepgramSession> {
-  // Session ID is generated client-side for tracking
   const sessionId = `dg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  
+
   return {
     sessionId,
     prompt,
+    audioChunks: [],
   }
 }
 
 /**
- * Transcribe audio chunk using Deepgram API
+ * Add audio chunk to session (accumulate for batch processing)
  */
-export async function transcribeDeepgramChunk(
-  sessionId: string,
-  audioChunk: Buffer,
-  existingTranscript: string = "",
-  customApiKey?: string,
-  prompt?: string
+export function addAudioChunkToSession(
+  session: DeepgramSession,
+  audioChunk: Buffer
+): void {
+  session.audioChunks.push(audioChunk)
+}
+
+/**
+ * Transcribe accumulated audio using Deepgram API
+ */
+export async function transcribeDeepgramAudio(
+  session: DeepgramSession,
+  customApiKey?: string
 ): Promise<DeepgramChunkResponse> {
   const apiKey = getDeepgramApiKey(customApiKey)
   if (!apiKey) {
     throw new Error("Deepgram API key not configured")
   }
+
+  // Combine all chunks
+  const combinedAudio = Buffer.concat(session.audioChunks)
 
   try {
     // Build query parameters including prompt if provided
@@ -63,26 +74,22 @@ export async function transcribeDeepgramChunk(
       language: "en",
       smart_format: "true",
     })
-    
-    // Add prompt as keywords if provided (Deepgram uses keywords parameter)
-    if (prompt) {
-      // Extract words from prompt for Deepgram keywords
-      const words = prompt
+
+    // Add prompt as keywords if provided
+    if (session.prompt) {
+      const words = session.prompt
         .replace(/Please use the following dictionary words when transcribing:/i, "")
         .replace(/\(should be transcribed as:[^)]+\)/g, "")
         .split(",")
         .map(w => w.trim())
         .filter(w => w.length > 0)
-        .slice(0, 100) // Limit to 100 keywords
-      
+        .slice(0, 100)
+
       if (words.length > 0) {
         params.append("keywords", words.join(","))
       }
     }
-    
-    // Deepgram prerecorded transcription endpoint
-    // Using nova-2 model for better accuracy
-    // Note: Deepgram expects audio/webm or other supported formats
+
     const response = await fetch(
       `${DEEPGRAM_API_URL}/listen?${params.toString()}`,
       {
@@ -91,7 +98,7 @@ export async function transcribeDeepgramChunk(
           "Authorization": `Token ${apiKey}`,
           "Content-Type": "audio/webm",
         },
-        body: new Uint8Array(audioChunk),
+        body: new Uint8Array(combinedAudio),
       }
     )
 
@@ -108,10 +115,8 @@ export async function transcribeDeepgramChunk(
     }
 
     const data = await response.json()
-    
-    // Extract transcript from Deepgram response
+
     let transcript = ""
-    
     if (data.results && data.results.channels && data.results.channels[0]) {
       const alternatives = data.results.channels[0].alternatives
       if (alternatives && alternatives[0]) {
@@ -119,153 +124,10 @@ export async function transcribeDeepgramChunk(
       }
     }
 
-    // --- AssemblyAI-style merging and duplicate logic ---
-    const normalizedTranscript = (transcript || "").trim()
-    const normalizedExisting = existingTranscript.trim()
-
-    // Skip empty transcripts (silence/no speech detected)
-    if (!normalizedTranscript) {
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: true,
-      }
-    }
-
-    // If no existing transcript, return the new one
-    if (!normalizedExisting) {
-      return {
-        session_id: sessionId,
-        transcript: normalizedTranscript,
-        incremental: normalizedTranscript,
-        is_final: true,
-      }
-    }
-
-    // Exact duplicate
-    if (normalizedExisting === normalizedTranscript) {
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: true,
-      }
-    }
-
-    // New transcript is entirely contained in existing (duplicate)
-    if (normalizedExisting.includes(normalizedTranscript)) {
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: true,
-      }
-    }
-
-    // New transcript contains the entire existing transcript (legitimate continuation)
-    if (normalizedTranscript.startsWith(normalizedExisting)) {
-      const incremental = normalizedTranscript.slice(normalizedExisting.length).trim()
-      if (incremental) {
-        return {
-          session_id: sessionId,
-          transcript: normalizedTranscript,
-          incremental,
-          is_final: true,
-        }
-      }
-      // No new content, return existing
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: true,
-      }
-    }
-
-    // Word-by-word overlap detection
-    const existingWords = normalizedExisting.split(/\s+/).filter(w => w.length > 0)
-    const newWords = normalizedTranscript.split(/\s+/).filter(w => w.length > 0)
-
-    // Find the longest matching suffix of existing that matches a prefix of new
-    let bestMatch = 0
-    for (let i = Math.min(existingWords.length, newWords.length); i > 0; i--) {
-      const existingSuffix = existingWords.slice(-i).join(" ")
-      const newPrefix = newWords.slice(0, i).join(" ")
-      const normalizedSuffix = existingSuffix.toLowerCase().replace(/[.,!?;:]/g, "")
-      const normalizedPrefix = newPrefix.toLowerCase().replace(/[.,!?;:]/g, "")
-      if (normalizedSuffix === normalizedPrefix) {
-        bestMatch = i
-        break
-      }
-    }
-
-    // If we found a good match, extract only the new words
-    if (bestMatch > 0 && bestMatch < newWords.length) {
-      const incremental = newWords.slice(bestMatch).join(" ")
-      const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
-      return {
-        session_id: sessionId,
-        transcript: mergedTranscript,
-        incremental,
-        is_final: true,
-      }
-    }
-
-    // If new transcript is significantly longer, it might be a correction or new content
-    // Only accept if it's at least 50% longer to avoid false positives
-    if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
-      // Check for any word overlap at all
-      const existingWordSet = new Set(existingWords.map(w => w.toLowerCase()))
-      const newWordSet = new Set(newWords.map(w => w.toLowerCase()))
-      const overlap = [...newWordSet].filter(w => existingWordSet.has(w)).length
-      if (overlap / newWordSet.size < 0.3) {
-        return {
-          session_id: sessionId,
-          transcript: normalizedTranscript,
-          incremental: normalizedTranscript,
-          is_final: true,
-        }
-      }
-    }
-
-    // Try to extract new words by finding common prefix
-    let commonPrefixLength = 0
-    for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
-      if (existingWords[i].toLowerCase() === newWords[i].toLowerCase()) {
-        commonPrefixLength = i + 1
-      } else {
-        break
-      }
-    }
-
-    if (commonPrefixLength > 0 && commonPrefixLength < newWords.length) {
-      const incremental = newWords.slice(commonPrefixLength).join(" ")
-      const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
-      return {
-        session_id: sessionId,
-        transcript: mergedTranscript,
-        incremental,
-        is_final: true,
-      }
-    }
-
-    // If new is significantly longer (50%+), treat as new content
-    if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
-      const mergedTranscript = `${normalizedExisting} ${normalizedTranscript}`.trim()
-      return {
-        session_id: sessionId,
-        transcript: mergedTranscript,
-        incremental: normalizedTranscript,
-        is_final: true,
-      }
-    }
-
-    // Fallback: return existing to prevent duplicates
     return {
-      session_id: sessionId,
-      transcript: existingTranscript,
-      incremental: "",
+      session_id: session.sessionId,
+      transcript: transcript.trim(),
+      incremental: transcript.trim(),
       is_final: true,
     }
   } catch (error: any) {
@@ -277,13 +139,18 @@ export async function transcribeDeepgramChunk(
  * Finalize Deepgram session
  */
 export async function finalizeDeepgramSession(
-  sessionId: string
+  session: DeepgramSession,
+  customApiKey?: string
 ): Promise<DeepgramChunkResponse> {
+  // Transcribe all accumulated audio
+  if (session.audioChunks.length > 0) {
+    return await transcribeDeepgramAudio(session, customApiKey)
+  }
+
   return {
-    session_id: sessionId,
+    session_id: session.sessionId,
     transcript: "",
     incremental: "",
     is_final: true,
   }
 }
-

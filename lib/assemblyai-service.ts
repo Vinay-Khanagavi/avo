@@ -1,10 +1,12 @@
 /**
  * AssemblyAI transcription service implementation
+ * Uses batch mode - accumulates audio and transcribes when recording stops
  */
 
 export interface AssemblyAISession {
   sessionId: string
   prompt?: string
+  audioChunks: Buffer[]  // Accumulate all audio chunks
 }
 
 export interface AssemblyAIChunkResponse {
@@ -31,35 +33,54 @@ function getAssemblyAIApiKey(customApiKey?: string): string {
 export async function createAssemblyAISession(
   prompt?: string
 ): Promise<AssemblyAISession> {
-  // Session ID is generated client-side for tracking
   const sessionId = `aa_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  
+
   return {
     sessionId,
     prompt,
+    audioChunks: [],
   }
 }
 
 /**
- * Transcribe audio chunk using AssemblyAI API
+ * Add audio chunk to session (accumulate for batch processing)
  */
-export async function transcribeAssemblyAIChunk(
-  sessionId: string,
-  audioChunk: Buffer,
-  existingTranscript: string = "",
-  customApiKey?: string,
-  prompt?: string
+export function addAudioChunkToSession(
+  session: AssemblyAISession,
+  audioChunk: Buffer
+): void {
+  session.audioChunks.push(audioChunk)
+}
+
+/**
+ * Transcribe accumulated audio using AssemblyAI API
+ */
+export async function transcribeAssemblyAIAudio(
+  session: AssemblyAISession,
+  customApiKey?: string
 ): Promise<AssemblyAIChunkResponse> {
   const apiKey = getAssemblyAIApiKey(customApiKey)
   if (!apiKey) {
     throw new Error("AssemblyAI API key not configured")
   }
 
+  // Combine all chunks
+  const combinedAudio = Buffer.concat(session.audioChunks)
+
+  if (combinedAudio.length === 0) {
+    return {
+      session_id: session.sessionId,
+      transcript: "",
+      incremental: "",
+      is_final: true,
+    }
+  }
+
   try {
-    // Step 1: Upload audio chunk to AssemblyAI
+    // Step 1: Upload audio to AssemblyAI
     // Convert Buffer to Uint8Array for fetch API compatibility
-    const uint8Array = new Uint8Array(audioChunk)
-    
+    const uint8Array = new Uint8Array(combinedAudio)
+
     const uploadResponse = await fetch(`${ASSEMBLYAI_API_URL}/upload`, {
       method: "POST",
       headers: {
@@ -83,24 +104,24 @@ export async function transcribeAssemblyAIChunk(
       punctuate: true,
       format_text: true,
     }
-    
+
     // Add prompt if provided (AssemblyAI uses word_boost parameter)
-    if (prompt) {
+    if (session.prompt) {
       // Extract words from prompt for word boost
-      const words = prompt
+      const words = session.prompt
         .replace(/Please use the following dictionary words when transcribing:/i, "")
         .replace(/\(should be transcribed as:[^)]+\)/g, "")
         .split(",")
         .map(w => w.trim())
         .filter(w => w.length > 0)
         .slice(0, 100) // Limit to 100 words
-      
+
       if (words.length > 0) {
         // AssemblyAI uses word_boost parameter to prioritize certain words
         requestBody.word_boost = words
       }
     }
-    
+
     const transcribeResponse = await fetch(`${ASSEMBLYAI_API_URL}/transcript`, {
       method: "POST",
       headers: {
@@ -118,10 +139,10 @@ export async function transcribeAssemblyAIChunk(
     const transcribeData = await transcribeResponse.json()
     const transcriptId = transcribeData.id
 
-    // Step 3: Poll for completion (with timeout)
+    // Step 3: Poll for completion
     let transcript = ""
     let isFinal = false
-    const maxAttempts = 20 // 10 seconds max (20 * 500ms)
+    const maxAttempts = 60 // 30 seconds max (60 * 500ms)
     let attempts = 0
 
     while (attempts < maxAttempts && !isFinal) {
@@ -138,7 +159,7 @@ export async function transcribeAssemblyAIChunk(
       }
 
       const statusData = await statusResponse.json()
-      
+
       if (statusData.status === "completed") {
         transcript = statusData.text || ""
         isFinal = true
@@ -149,165 +170,11 @@ export async function transcribeAssemblyAIChunk(
       attempts++
     }
 
-    // Normalize transcript text
-    const normalizedTranscript = (transcript || "").trim()
-    const normalizedExisting = existingTranscript.trim()
-    
-    // Skip empty transcripts (silence/no speech detected)
-    if (!normalizedTranscript) {
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: isFinal,
-      }
-    }
-    
-    // If no existing transcript, return the new one
-    if (!normalizedExisting) {
-      return {
-        session_id: sessionId,
-        transcript: normalizedTranscript,
-        incremental: normalizedTranscript,
-        is_final: isFinal,
-      }
-    }
-    
-    // Improved duplicate detection: Check if new transcript is identical or contained
-    if (normalizedExisting === normalizedTranscript) {
-      // Exact duplicate
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: isFinal,
-      }
-    }
-    
-    // Check if new transcript is entirely contained in existing (duplicate)
-    if (normalizedExisting.includes(normalizedTranscript)) {
-      return {
-        session_id: sessionId,
-        transcript: existingTranscript,
-        incremental: "",
-        is_final: isFinal,
-      }
-    }
-    
-    // Check if new transcript contains the entire existing transcript (legitimate continuation)
-    if (normalizedTranscript.startsWith(normalizedExisting)) {
-    // Extract only the new part
-      const incremental = normalizedTranscript.slice(normalizedExisting.length).trim()
-      if (incremental) {
-        return {
-          session_id: sessionId,
-          transcript: normalizedTranscript,
-          incremental,
-          is_final: isFinal,
-        }
-      }
-      // No new content, return existing
-        return {
-          session_id: sessionId,
-          transcript: existingTranscript,
-          incremental: "",
-          is_final: isFinal,
-        }
-      }
-    
-    // Word-by-word comparison to find overlap and extract new content
-    const existingWords = normalizedExisting.split(/\s+/).filter(w => w.length > 0)
-    const newWords = normalizedTranscript.split(/\s+/).filter(w => w.length > 0)
-    
-    // Find the longest matching suffix of existing that matches a prefix of new
-    // This handles cases where transcription slightly changes previous words
-    let bestMatch = 0
-    for (let i = Math.min(existingWords.length, newWords.length); i > 0; i--) {
-      const existingSuffix = existingWords.slice(-i).join(" ")
-      const newPrefix = newWords.slice(0, i).join(" ")
-      
-      // Normalize for comparison (case-insensitive, ignore punctuation differences)
-      const normalizedSuffix = existingSuffix.toLowerCase().replace(/[.,!?;:]/g, "")
-      const normalizedPrefix = newPrefix.toLowerCase().replace(/[.,!?;:]/g, "")
-      
-      if (normalizedSuffix === normalizedPrefix) {
-        bestMatch = i
-            break
-          }
-        }
-        
-    // If we found a good match, extract only the new words
-    if (bestMatch > 0 && bestMatch < newWords.length) {
-      const incremental = newWords.slice(bestMatch).join(" ")
-      const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
-      
-      return {
-        session_id: sessionId,
-        transcript: mergedTranscript,
-        incremental,
-        is_final: isFinal,
-      }
-    }
-    
-    // If new transcript is significantly longer, it might be a correction or new content
-    // Only accept if it's at least 50% longer to avoid false positives
-    if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
-      // Check for any word overlap at all
-      const existingWordSet = new Set(existingWords.map(w => w.toLowerCase()))
-      const newWordSet = new Set(newWords.map(w => w.toLowerCase()))
-      const overlap = [...newWordSet].filter(w => existingWordSet.has(w)).length
-      
-      // If less than 30% overlap, treat as new content
-      if (overlap / newWordSet.size < 0.3) {
-        return {
-          session_id: sessionId,
-          transcript: normalizedTranscript,
-          incremental: normalizedTranscript,
-          is_final: isFinal,
-        }
-      }
-    }
-    
-    // Try to extract new words by finding common prefix
-    let commonPrefixLength = 0
-    for (let i = 0; i < Math.min(existingWords.length, newWords.length); i++) {
-      if (existingWords[i].toLowerCase() === newWords[i].toLowerCase()) {
-        commonPrefixLength = i + 1
-      } else {
-        break
-      }
-    }
-    
-    // If we found a common prefix and there are new words after it
-    if (commonPrefixLength > 0 && commonPrefixLength < newWords.length) {
-      const incremental = newWords.slice(commonPrefixLength).join(" ")
-      const mergedTranscript = `${normalizedExisting} ${incremental}`.trim()
-      
-      return {
-        session_id: sessionId,
-        transcript: mergedTranscript,
-        incremental,
-        is_final: isFinal,
-      }
-    }
-    
-    // If new is significantly longer (50%+), treat as new content
-    if (normalizedTranscript.length > normalizedExisting.length * 1.5) {
-      const mergedTranscript = `${normalizedExisting} ${normalizedTranscript}`.trim()
-      return {
-        session_id: sessionId,
-        transcript: mergedTranscript,
-        incremental: normalizedTranscript,
-        is_final: isFinal,
-      }
-    }
-    
-    // Fallback: return existing to prevent duplicates
     return {
-      session_id: sessionId,
-      transcript: existingTranscript,
-      incremental: "",
-      is_final: isFinal,
+      session_id: session.sessionId,
+      transcript: transcript.trim(),
+      incremental: transcript.trim(),
+      is_final: true,
     }
   } catch (error: any) {
     throw new Error(`AssemblyAI transcription failed: ${error.message}`)
@@ -318,13 +185,18 @@ export async function transcribeAssemblyAIChunk(
  * Finalize AssemblyAI session
  */
 export async function finalizeAssemblyAISession(
-  sessionId: string
+  session: AssemblyAISession,
+  customApiKey?: string
 ): Promise<AssemblyAIChunkResponse> {
+  // Transcribe all accumulated audio
+  if (session.audioChunks.length > 0) {
+    return await transcribeAssemblyAIAudio(session, customApiKey)
+  }
+
   return {
-    session_id: sessionId,
+    session_id: session.sessionId,
     transcript: "",
     incremental: "",
     is_final: true,
   }
 }
-

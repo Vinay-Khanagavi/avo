@@ -3,34 +3,36 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import {
   createDeepgramSession,
-  transcribeDeepgramChunk,
-  finalizeDeepgramSession
+  addAudioChunkToSession as addDeepgramChunk,
+  finalizeDeepgramSession,
+  type DeepgramSession
 } from "@/lib/deepgram-service"
 import {
   createAssemblyAISession,
-  transcribeAssemblyAIChunk,
-  finalizeAssemblyAISession
+  addAudioChunkToSession as addAssemblyAIChunk,
+  finalizeAssemblyAISession,
+  type AssemblyAISession
 } from "@/lib/assemblyai-service"
 import {
   createGroqWhisperSession,
-  transcribeGroqWhisperChunk,
+  addAudioChunkToSession as addGroqChunk,
+  processAudioSlice as processGroqSlice,
+  shouldProcessSlice as shouldProcessGroqSlice,
   finalizeGroqWhisperSession,
-  GroqWhisperSession,
-  addAudioChunkToSession,
-  processAudioSlice,
-  shouldProcessSlice
+  type GroqWhisperSession
 } from "@/lib/groq-whisper-service"
 
 
 const WHISPER_SERVICE_URL = process.env.WHISPER_SERVICE_URL || "http://localhost:8000"
 const WHISPER_API_KEY = process.env.WHISPER_API_KEY || ""
 
-// In-memory session storage for Deepgram and AssemblyAI
-// In production, consider using Redis or a database
+// In-memory session storage for basic info (used for database saves)
 const sessionStorage = new Map<string, { transcript: string; service: string; prompt?: string }>()
 
-// Dedicated storage for Groq Whisper sessions (with full session state)
+// Dedicated storage for streaming sessions (with full session state)
 const groqSessionStorage = new Map<string, GroqWhisperSession>()
+const deepgramSessionStorage = new Map<string, DeepgramSession>()
+const assemblyAISessionStorage = new Map<string, AssemblyAISession>()
 
 /**
  * Create a new transcription session
@@ -67,25 +69,25 @@ export async function POST(request: NextRequest) {
         // Route to appropriate service
         if (service === "deepgram") {
           try {
-            const sessionData = sessionStorage.get(sessionId)
-            const existingTranscript = sessionData?.transcript || ""
-            const prompt = sessionData?.prompt
+            const deepgramSession = deepgramSessionStorage.get(sessionId)
 
-            const result = await transcribeDeepgramChunk(
-              sessionId,
-              audioBuffer,
-              existingTranscript,
-              customApiKey || undefined,
-              prompt
-            )
+            if (!deepgramSession) {
+              return NextResponse.json(
+                { error: "Session not found. Please create a new session." },
+                { status: 404 }
+              )
+            }
 
-            // Update session storage with raw transcript
-            sessionStorage.set(sessionId, {
-              transcript: result.transcript,
-              service: "deepgram",
+            // Simply accumulate audio chunks (will transcribe on finalize)
+            addDeepgramChunk(deepgramSession, audioBuffer)
+
+            // Return empty response (no processing until finalize)
+            return NextResponse.json({
+              session_id: sessionId,
+              transcript: "",
+              incremental: "",
+              is_final: false,
             })
-
-            return NextResponse.json(result)
           } catch (error: any) {
             console.error("Deepgram transcription error:", error)
             return NextResponse.json(
@@ -95,25 +97,25 @@ export async function POST(request: NextRequest) {
           }
         } else if (service === "assemblyai") {
           try {
-            const sessionData = sessionStorage.get(sessionId)
-            const existingTranscript = sessionData?.transcript || ""
-            const prompt = sessionData?.prompt
+            const assemblyAISession = assemblyAISessionStorage.get(sessionId)
 
-            const result = await transcribeAssemblyAIChunk(
-              sessionId,
-              audioBuffer,
-              existingTranscript,
-              customApiKey || undefined,
-              prompt
-            )
+            if (!assemblyAISession) {
+              return NextResponse.json(
+                { error: "Session not found. Please create a new session." },
+                { status: 404 }
+              )
+            }
 
-            // Update session storage with raw transcript
-            sessionStorage.set(sessionId, {
-              transcript: result.transcript,
-              service: "assemblyai",
+            // Simply accumulate audio chunks (will transcribe on finalize)
+            addAssemblyAIChunk(assemblyAISession, audioBuffer)
+
+            // Return empty response (no processing until finalize)
+            return NextResponse.json({
+              session_id: sessionId,
+              transcript: "",
+              incremental: "",
+              is_final: false,
             })
-
-            return NextResponse.json(result)
           } catch (error: any) {
             console.error("AssemblyAI transcription error:", error)
             return NextResponse.json(
@@ -134,11 +136,11 @@ export async function POST(request: NextRequest) {
             }
 
             // Add audio chunk to the session buffer
-            addAudioChunkToSession(groqSession, audioBuffer)
+            addGroqChunk(groqSession, audioBuffer)
 
             // Check if we should process this slice
-            if (shouldProcessSlice(groqSession)) {
-              const result = await processAudioSlice(
+            if (shouldProcessGroqSlice(groqSession)) {
+              const result = await processGroqSlice(
                 groqSession,
                 customApiKey || undefined
               )
@@ -228,11 +230,15 @@ export async function POST(request: NextRequest) {
       if (service === "deepgram") {
         try {
           const session = await createDeepgramSession(body.prompt)
+
+          // Store in both maps
+          deepgramSessionStorage.set(session.sessionId, session)
           sessionStorage.set(session.sessionId, {
             transcript: "",
             service: "deepgram",
             prompt: body.prompt,
           })
+
           return NextResponse.json({ session_id: session.sessionId, status: "created" })
         } catch (error: any) {
           console.error("Deepgram session creation error:", error)
@@ -244,11 +250,15 @@ export async function POST(request: NextRequest) {
       } else if (service === "assemblyai") {
         try {
           const session = await createAssemblyAISession(body.prompt)
+
+          // Store in both maps
+          assemblyAISessionStorage.set(session.sessionId, session)
           sessionStorage.set(session.sessionId, {
             transcript: "",
             service: "assemblyai",
             prompt: body.prompt,
           })
+
           return NextResponse.json({ session_id: session.sessionId, status: "created" })
         } catch (error: any) {
           console.error("AssemblyAI session creation error:", error)
@@ -317,32 +327,54 @@ export async function POST(request: NextRequest) {
 
       if (service === "deepgram") {
         try {
-          const result = await finalizeDeepgramSession(sessionId)
-          const finalTranscript = sessionData?.transcript || ""
+          // Get the Deepgram session
+          const deepgramSession = deepgramSessionStorage.get(sessionId)
 
-          // Save final transcript to database
-          if (finalTranscript.trim()) {
-            try {
-              const { prisma } = await import("@/lib/prisma")
-              await prisma.transcription.create({
-                data: {
-                  text: finalTranscript.trim(),
-                  userId: session.user.id,
-                },
-              })
-            } catch (dbError: any) {
-              console.error("Failed to save transcription to database:", dbError)
+          if (deepgramSession) {
+            // Finalize the session
+            const result = await finalizeDeepgramSession(
+              deepgramSession,
+              body.customApiKey || undefined
+            )
+
+            const finalTranscript = result.transcript
+
+            // Save final transcript to database
+            if (finalTranscript.trim()) {
+              try {
+                const { prisma } = await import("@/lib/prisma")
+                await prisma.transcription.create({
+                  data: {
+                    text: finalTranscript.trim(),
+                    userId: session.user.id,
+                  },
+                })
+              } catch (dbError: any) {
+                console.error("Failed to save transcription to database:", dbError)
+              }
             }
+
+            // Clean up both session storages
+            deepgramSessionStorage.delete(sessionId)
+            sessionStorage.delete(sessionId)
+
+            return NextResponse.json({
+              session_id: sessionId,
+              transcript: finalTranscript,
+              is_final: true,
+            })
+          } else {
+            // Session not found, just return what we have in sessionStorage
+            const finalTranscript = sessionData?.transcript || ""
+
+            sessionStorage.delete(sessionId)
+
+            return NextResponse.json({
+              session_id: sessionId,
+              transcript: finalTranscript,
+              is_final: true,
+            })
           }
-
-          // Clean up session
-          sessionStorage.delete(sessionId)
-
-          return NextResponse.json({
-            session_id: sessionId,
-            transcript: finalTranscript,
-            is_final: true,
-          })
         } catch (error: any) {
           console.error("Deepgram finalize error:", error)
           return NextResponse.json(
@@ -352,32 +384,54 @@ export async function POST(request: NextRequest) {
         }
       } else if (service === "assemblyai") {
         try {
-          const result = await finalizeAssemblyAISession(sessionId)
-          const finalTranscript = sessionData?.transcript || ""
+          // Get the AssemblyAI session
+          const assemblyAISession = assemblyAISessionStorage.get(sessionId)
 
-          // Save final transcript to database
-          if (finalTranscript.trim()) {
-            try {
-              const { prisma } = await import("@/lib/prisma")
-              await prisma.transcription.create({
-                data: {
-                  text: finalTranscript.trim(),
-                  userId: session.user.id,
-                },
-              })
-            } catch (dbError: any) {
-              console.error("Failed to save transcription to database:", dbError)
+          if (assemblyAISession) {
+            // Finalize the session
+            const result = await finalizeAssemblyAISession(
+              assemblyAISession,
+              body.customApiKey || undefined
+            )
+
+            const finalTranscript = result.transcript
+
+            // Save final transcript to database
+            if (finalTranscript.trim()) {
+              try {
+                const { prisma } = await import("@/lib/prisma")
+                await prisma.transcription.create({
+                  data: {
+                    text: finalTranscript.trim(),
+                    userId: session.user.id,
+                  },
+                })
+              } catch (dbError: any) {
+                console.error("Failed to save transcription to database:", dbError)
+              }
             }
+
+            // Clean up both session storages
+            assemblyAISessionStorage.delete(sessionId)
+            sessionStorage.delete(sessionId)
+
+            return NextResponse.json({
+              session_id: sessionId,
+              transcript: finalTranscript,
+              is_final: true,
+            })
+          } else {
+            // Session not found, just return what we have in sessionStorage
+            const finalTranscript = sessionData?.transcript || ""
+
+            sessionStorage.delete(sessionId)
+
+            return NextResponse.json({
+              session_id: sessionId,
+              transcript: finalTranscript,
+              is_final: true,
+            })
           }
-
-          // Clean up session
-          sessionStorage.delete(sessionId)
-
-          return NextResponse.json({
-            session_id: sessionId,
-            transcript: finalTranscript,
-            is_final: true,
-          })
         } catch (error: any) {
           console.error("AssemblyAI finalize error:", error)
           return NextResponse.json(

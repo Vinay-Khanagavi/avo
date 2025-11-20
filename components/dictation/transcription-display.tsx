@@ -70,18 +70,21 @@ export function TranscriptionDisplay({
       )}
       <CardContent className="p-6 relative z-10">
         <div className="relative group">
-          <div 
+          <div
             ref={scrollContainerRef}
             className="min-h-[200px] max-h-[600px] overflow-y-auto"
           >
             {transcript ? (
-              <p className={`text-lg leading-relaxed whitespace-pre-wrap break-words ${
-                transcript.startsWith("[Error:") ? "text-destructive" : ""
-              }`}>
+              <p className={`text-lg leading-relaxed whitespace-pre-wrap break-words ${transcript.startsWith("[Error:") ? "text-destructive" : ""
+                }`}>
                 {transcript}
                 {isProcessing && !transcript.startsWith("[Error:") && (
                   <span className="inline-block w-2 h-5 bg-primary animate-pulse ml-1" />
                 )}
+              </p>
+            ) : isRecording ? (
+              <p className="text-muted-foreground text-center py-8 italic">
+                Listening...
               </p>
             ) : (
               <p className="text-muted-foreground text-center py-8">
