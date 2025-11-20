@@ -97,16 +97,19 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                <SelectLabel className="font-semibold">Batch Processing</SelectLabel>
-                <SelectItem value="whisper" className="pl-8">
-                  {hasCustomKeys ? "Whisper (Custom)" : "Whisper (AWS)"}
-                </SelectItem>
+                <SelectLabel className="font-semibold">API Services (Batch)</SelectLabel>
                 <SelectItem value="deepgram" className="pl-8">Deepgram</SelectItem>
                 <SelectItem value="assemblyai" className="pl-8">AssemblyAI</SelectItem>
               </SelectGroup>
               <SelectGroup>
-                <SelectLabel className="font-semibold">Real-time Streaming</SelectLabel>
+                <SelectLabel className="font-semibold">API Services (Streaming)</SelectLabel>
                 <SelectItem value="groq-whisper" className="pl-8">Groq Whisper</SelectItem>
+              </SelectGroup>
+              <SelectGroup>
+                <SelectLabel className="font-semibold">Self-Hosted (AWS EC2)</SelectLabel>
+                <SelectItem value="whisper" className="pl-8">
+                  {hasCustomKeys ? "Whisper (Custom)" : "Whisper (AWS)"}
+                </SelectItem>
               </SelectGroup>
               <SelectItem value="add-custom" className="text-primary">
                 <div className="flex items-center gap-2">
@@ -134,16 +137,19 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectLabel className="font-semibold">Batch Processing</SelectLabel>
-              <SelectItem value="whisper" className="pl-8">
-                {hasCustomKeys ? "Whisper (Custom)" : "Whisper (AWS)"}
-              </SelectItem>
+              <SelectLabel className="font-semibold">API Services (Batch)</SelectLabel>
               <SelectItem value="deepgram" className="pl-8">Deepgram</SelectItem>
               <SelectItem value="assemblyai" className="pl-8">AssemblyAI</SelectItem>
             </SelectGroup>
             <SelectGroup>
-              <SelectLabel className="font-semibold">Real-time Streaming</SelectLabel>
+              <SelectLabel className="font-semibold">API Services (Streaming)</SelectLabel>
               <SelectItem value="groq-whisper" className="pl-8">Groq Whisper</SelectItem>
+            </SelectGroup>
+            <SelectGroup>
+              <SelectLabel className="font-semibold">Self-Hosted (AWS EC2)</SelectLabel>
+              <SelectItem value="whisper" className="pl-8">
+                {hasCustomKeys ? "Whisper (Custom)" : "Whisper (AWS)"}
+              </SelectItem>
             </SelectGroup>
             <SelectItem value="add-custom" className="text-primary">
               <div className="flex items-center gap-2">
