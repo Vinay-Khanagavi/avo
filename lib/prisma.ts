@@ -6,11 +6,18 @@ const globalForPrisma = globalThis as unknown as {
 
 // Create Prisma client with better error handling and connection settings
 function createPrismaClient() {
-  // Validate DATABASE_URL is set
+  // Check for Vercel Postgres
+  if (process.env.POSTGRES_PRISMA_URL) {
+    return new PrismaClient({
+      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    })
+  }
+
+  // Validate DATABASE_URL is set (fallback for Railway/Local)
   if (!process.env.DATABASE_URL) {
     throw new Error(
       'DATABASE_URL environment variable is not set. ' +
-      'Please ensure DATABASE_URL is configured in Railway environment variables.'
+      'Please ensure DATABASE_URL is configured in environment variables.'
     )
   }
 
@@ -18,16 +25,16 @@ function createPrismaClient() {
   // For Railway PostgreSQL, connection pooling is handled automatically
   // Only add pool settings if not already present in DATABASE_URL
   const databaseUrl = process.env.DATABASE_URL
-  
+
   // Check if connection pool parameters are already in the URL
   const hasPoolParams = databaseUrl.includes('connection_limit') || databaseUrl.includes('pool_timeout')
-  
+
   // Add connection pool parameters if not already present (helps with Railway)
-  const urlWithPool = hasPoolParams 
+  const urlWithPool = hasPoolParams
     ? databaseUrl
-    : (databaseUrl.includes('?') 
-        ? `${databaseUrl}&connection_limit=10&pool_timeout=20`
-        : `${databaseUrl}?connection_limit=10&pool_timeout=20`)
+    : (databaseUrl.includes('?')
+      ? `${databaseUrl}&connection_limit=10&pool_timeout=20`
+      : `${databaseUrl}?connection_limit=10&pool_timeout=20`)
 
   const client = new PrismaClient({
     datasources: {
@@ -43,12 +50,12 @@ function createPrismaClient() {
     process.on('beforeExit', async () => {
       await client.$disconnect()
     })
-    
+
     process.on('SIGINT', async () => {
       await client.$disconnect()
       process.exit(0)
     })
-    
+
     process.on('SIGTERM', async () => {
       await client.$disconnect()
       process.exit(0)
