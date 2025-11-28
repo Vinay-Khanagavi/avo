@@ -16,8 +16,8 @@ function createPrismaClient() {
   // Validate DATABASE_URL is set (fallback for Railway/Local)
   if (!process.env.DATABASE_URL) {
     throw new Error(
-      'DATABASE_URL environment variable is not set. ' +
-      'Please ensure DATABASE_URL is configured in environment variables.'
+      'Database configuration missing. ' +
+      'Please ensure either POSTGRES_PRISMA_URL (for Vercel Postgres) or DATABASE_URL (for other providers) is set.'
     )
   }
 
