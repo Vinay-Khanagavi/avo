@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, TooltipPortal } from "@/components/ui/tooltip"
 import { Plus } from "lucide-react"
 import { ApiKeyDialog } from "./api-key-dialog"
 
@@ -107,8 +108,23 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
               </SelectGroup>
               <SelectGroup>
                 <SelectLabel className="font-semibold">Self-Hosted (AWS EC2)</SelectLabel>
-                <SelectItem value="whisper" className="pl-8">
-                  {hasCustomKeys ? "Whisper (Custom)" : "Whisper (AWS)"}
+                <SelectItem value="whisper" className="pl-8" disabled={!hasCustomKeys}>
+                  {hasCustomKeys ? (
+                    "Whisper (Custom)"
+                  ) : (
+                    <TooltipProvider>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <span className="pointer-events-auto">Whisper (AWS)</span>
+                        </TooltipTrigger>
+                        <TooltipPortal>
+                          <TooltipContent side="bottom" align="start">
+                            <p>Unavailable due to cost increased more than $50</p>
+                          </TooltipContent>
+                        </TooltipPortal>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </SelectItem>
               </SelectGroup>
               <SelectItem value="add-custom" className="text-primary">
@@ -147,8 +163,23 @@ export function ServiceSelector({ value, onChange, disabled, compact = false }: 
             </SelectGroup>
             <SelectGroup>
               <SelectLabel className="font-semibold">Self-Hosted (AWS EC2)</SelectLabel>
-              <SelectItem value="whisper" className="pl-8">
-                {hasCustomKeys ? "Whisper (Custom)" : "Whisper (AWS)"}
+              <SelectItem value="whisper" className="pl-8" disabled={!hasCustomKeys}>
+                {hasCustomKeys ? (
+                  "Whisper (Custom)"
+                ) : (
+                  <TooltipProvider>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <span className="pointer-events-auto">Whisper (AWS)</span>
+                      </TooltipTrigger>
+                      <TooltipPortal>
+                        <TooltipContent side="bottom" align="start">
+                          <p>Unavailable due to cost increased more than $50</p>
+                        </TooltipContent>
+                      </TooltipPortal>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </SelectItem>
             </SelectGroup>
             <SelectItem value="add-custom" className="text-primary">
